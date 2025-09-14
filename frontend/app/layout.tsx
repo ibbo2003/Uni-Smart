@@ -1,3 +1,4 @@
+import "./globals.css"
 export const metadata = {
   title: "Uni-Smart",
   description: "University Management Platform",
