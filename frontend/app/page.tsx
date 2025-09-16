@@ -13,7 +13,7 @@ const HomePage = () => {
         <p className="text-lg sm:text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
           The ultimate web app for students and professors to stay updated with academic news, timetables, and result analysis.
         </p>
-        <Link href="/dashboard" className="inline-block px-10 py-4 font-bold text-white bg-blue-600 rounded-full shadow-lg hover:bg-blue-700 transition-colors transform hover:scale-105">
+        <Link href="/auth" className="inline-block px-10 py-4 font-bold text-white bg-blue-600 rounded-full shadow-lg hover:bg-blue-700 transition-colors transform hover:scale-105">
             Get Started
         </Link>
       </div>
