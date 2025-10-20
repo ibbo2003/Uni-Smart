@@ -117,3 +117,40 @@ CREATE TABLE IF NOT EXISTS exam_seating_plan (
   UNIQUE KEY unique_seat (exam_id, room_id, row_num, col_num)
 );
 
+select * from sections;
+
+-- Truncate all the files
+SET FOREIGN_KEY_CHECKS = 0; 
+
+TRUNCATE TABLE scheduled_classes;
+TRUNCATE TABLE exam_seating_plan;
+TRUNCATE TABLE exam_registrations;
+TRUNCATE TABLE subjects;
+TRUNCATE TABLE exams;
+TRUNCATE TABLE students;
+TRUNCATE TABLE faculty;
+TRUNCATE TABLE sections;
+TRUNCATE TABLE exam_rooms;
+TRUNCATE TABLE lab_rooms;
+
+-- Re-enable the foreign key checks
+SET FOREIGN_KEY_CHECKS = 1;
+
+
+SELECT
+    section_id,
+    day,
+    period,
+    COUNT(DISTINCT subject_code) AS parallel_lab_count,
+    GROUP_CONCAT(DISTINCT subject_code ORDER BY subject_code SEPARATOR ', ') AS subjects,
+    GROUP_CONCAT(DISTINCT room_id ORDER BY room_id SEPARATOR ', ') AS rooms
+FROM
+    scheduled_classes
+WHERE
+    is_theory = 0 -- Filter for labs only
+GROUP BY
+    section_id, day, period
+HAVING
+    parallel_lab_count > 1 -- Find only the slots with 2 or more labs
+ORDER BY
+    section_id, day, period;

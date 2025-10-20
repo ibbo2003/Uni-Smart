@@ -19,8 +19,8 @@ interface User {
 
 // Mock data (would normally come from Firebase or backend)
 const mockUserData = {
-  isAdmin: true,
-  isProfessor: false,
+  isAdmin: false,
+  isProfessor: true,
   name: "Jane Smith",
   id: "STU-1234",
 };

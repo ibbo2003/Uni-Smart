@@ -85,7 +85,7 @@ const HomePage = () => {
       </div>
 
       <div className="mt-16 text-center text-gray-500 text-sm">
-        &copy; 2024 Uni-Smart. All rights reserved.
+        &copy; 2025 Uni-Smart. All rights reserved.
       </div>
     </div>
   );

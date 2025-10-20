@@ -57,15 +57,17 @@ app.post('/api/timetable/generate', async (req, res) => {
             console.log(`[GATEWAY] ✅ Fetched ${rows.length} slots to return to frontend.`);
             
             // Return a success message AND the newly created timetable data
-            res.status(200).json({ 
+            return res.status(200).json({ 
                 message: 'Timetable generated and saved successfully!',
                 timetable: rows // Send the timetable data back
             });
         }else{
             console.log('[GATEWAY] 🟡 Python service returned an empty timetable. Nothing to save.');
+            return res.status(200).json({ 
+                message: 'Algorithm ran but no timetable was generated.',
+                timetable: [] 
+            });
         }
-
-        res.status(200).json({ message: 'Timetable generated and saved successfully!' });
     } catch (error) {
         console.error('[GATEWAY] ❌ An error occurred in the gateway:');
         if (error.response) {
@@ -79,7 +81,7 @@ app.post('/api/timetable/generate', async (req, res) => {
             // Generic error
             console.error('   - Generic Error:', error.message);
         }
-        res.status(500).json({ message: 'An error occurred', error: error.message });
+        return res.status(500).json({ message: 'An error occurred', error: error.message });
     } finally {
         if (connection) connection.end();
         console.log('[GATEWAY] Database connection closed.');

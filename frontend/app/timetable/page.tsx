@@ -19,6 +19,7 @@ interface TimeSlot {
   period: number;
   subject_code: string;
   subject_name: string;
+  subject_type: string; // <-- Add this field
   faculty_id: string;
   room_id: string;
   batch_number?: number;
@@ -51,10 +52,7 @@ const TimetableGrid = ({ timetableData }: { timetableData: TimeSlot[] }) => {
             <div className="overflow-x-auto">
                 <table className="min-w-full border-collapse border border-gray-300">
                     <thead>
-                        <tr className="bg-gray-200">
-                            <th className="border border-gray-300 p-2 font-semibold">Time / Day</th>
-                            {days.map(day => <th key={day} className="border border-gray-300 p-2 font-semibold">{day}</th>)}
-                        </tr>
+                        {/* ... Table head is unchanged ... */}
                     </thead>
                     <tbody>
                         {periods.map((time, periodIndex) => (
@@ -64,20 +62,65 @@ const TimetableGrid = ({ timetableData }: { timetableData: TimeSlot[] }) => {
                                     {days.map((day, dayIndex) => {
                                         const key = `${dayIndex}-${periodIndex}`;
                                         const slots = scheduleMap.get(key);
-                                        return (
-                                            <td key={`${day}-${time}`} className={`border border-gray-300 p-2 text-center text-xs h-24 align-top ${slots ? (slots[0].is_theory ? 'bg-green-50' : 'bg-blue-50') : 'bg-gray-50'}`}>
-                                                {slots ? slots.map((slot, i) => (
-                                                    <div key={i} className="mb-1">
-                                                        <p className="font-bold">{slot.subject_code}{slot.is_theory ? '' : ' LAB'}</p>
-                                                        <p>{slot.subject_name}</p>
-                                                        <p className="text-gray-600">{slot.faculty_id}</p>
-                                                        <p className="text-gray-500 italic">
-                                                            {slot.is_theory ? `(${slot.room_id})` : `B${slot.batch_number} (${slot.room_id})`}
-                                                        </p>
-                                                    </div>
-                                                )) : 'FREE'}
-                                            </td>
-                                        );
+                                        
+                                        // --- START OF NEW & IMPROVED RENDER LOGIC ---
+                                        if (slots) {
+                                            const isProject = slots[0].subject_type === 'PROJ';
+                                            const isLab = !slots[0].is_theory;
+                                            const isParallelLab = isLab && slots.length > 1;
+
+                                            let bgColor = 'bg-gray-50';
+                                            if (isProject) bgColor = 'bg-yellow-50';
+                                            else if (isLab) bgColor = 'bg-blue-50';
+                                            else bgColor = 'bg-green-50';
+
+                                            // Check if this is the second hour of a lab/project block
+                                            const prevKey = `${dayIndex}-${periodIndex - 1}`;
+                                            const prevSlots = scheduleMap.get(prevKey);
+                                            if (prevSlots && 
+                                                ((isLab && !prevSlots[0].is_theory && prevSlots[0].subject_code === slots[0].subject_code) ||
+                                                (isProject && prevSlots[0].subject_type === 'PROJ'))) {
+                                                return (
+                                                    <td key={key} className={`border border-gray-300 p-2 text-center text-xs h-24 align-middle ${bgColor}`}>
+                                                        <p className="font-semibold text-gray-500 italic">(Continued)</p>
+                                                    </td>
+                                                );
+                                            }
+
+                                            return (
+                                                <td key={key} className={`border border-gray-300 p-2 text-center text-xs h-24 align-top ${bgColor}`}>
+                                                    {/* Display for Parallel Labs */}
+                                                    {isParallelLab && (
+                                                        <div className="font-bold">
+                                                            {slots.map(slot => 
+                                                                `${slot.subject_code} Lab (B${slot.batch_number}) ${slot.faculty_id}`
+                                                            ).join(' / ')}
+                                                        </div>
+                                                    )}
+
+                                                    {/* Display for Single Labs, Projects, or Theory */}
+                                                    {!isParallelLab && slots.map((slot, i) => (
+                                                        <div key={i} className="mb-1">
+                                                            <p className="font-bold">
+                                                                {isProject ? `${slot.subject_code} - PROJECT`
+                                                                    : isLab ? `${slot.subject_code} LAB`
+                                                                    : slot.subject_code
+                                                                }
+                                                            </p>
+                                                            <p>{slot.subject_name}</p>
+                                                            <p className="text-gray-600">{slot.faculty_id}</p>
+                                                            <p className="text-gray-500 italic">
+                                                                {isLab ? `B${slot.batch_number} (${slot.room_id})` : `(${slot.room_id})`}
+                                                            </p>
+                                                        </div>
+                                                    ))}
+                                                </td>
+                                            );
+                                        }
+
+                                        // Return a FREE slot if no 'slots' exist
+                                        return <td key={key} className="border border-gray-300 p-2 text-center text-xs h-24 align-middle bg-gray-50">FREE</td>;
+                                        // --- END OF NEW RENDER LOGIC ---
                                     })}
                                 </tr>
                                 {periodIndex === 1 && <tr className="bg-orange-100 font-bold text-orange-800"><td colSpan={7} className="text-center p-1">BREAK</td></tr>}
@@ -131,7 +174,7 @@ export default function TimetablePage() {
   }, []);
 
   // --- EVENT HANDLERS ---
-  const addSubjectRow = () => setSubjects([...subjects, { subject_code: '', subject_name: '', subject_type: '', theory_hours: 0, lab_hours: 0, theory_faculty: '', lab_faculty: '', no_of_batches: 1 }]);
+  const addSubjectRow = () => setSubjects([...subjects, { subject_code: '', subject_name: '', subject_type: '', theory_hours: 0, lab_hours: 0, theory_faculty: '', lab_faculty: '', no_of_batches: 0 }]);
   
   const handleSubjectChange = (index: number, field: keyof SubjectInput, value: string | number) => {
     const updatedSubjects = subjects.map((subject, i) => {
@@ -246,9 +289,26 @@ export default function TimetablePage() {
 
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
-                        {/* ... Table Head ... */}
+                        <thead className="bg-gray-100">
+                            <tr>
+                                {['Code', 'Name', 'Type', 'Theory Hrs', 'Lab Hrs', 'Theory Faculty', 'Lab Faculty', 'Batches'].map(h => 
+                                    <th key={h} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{h}</th>
+                                )}
+                            </tr>
+                        </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                            {/* Table rows are rendered here */}
+                            {subjects.map((sub, index) => (
+                                <tr key={index} className="hover:bg-gray-50">
+                                    <td className="px-6 py-4 whitespace-nowrap"><input type="text" value={sub.subject_code} onChange={e => handleSubjectChange(index, 'subject_code', e.target.value)} className="w-full p-1 border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"/></td>
+                                    <td className="px-6 py-4 whitespace-nowrap"><input type="text" value={sub.subject_name} onChange={e => handleSubjectChange(index, 'subject_name', e.target.value)} className="w-full p-1 border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"/></td>
+                                    <td className="px-6 py-4 whitespace-nowrap"><input type="text" value={sub.subject_type} onChange={e => handleSubjectChange(index, 'subject_type', e.target.value)} className="w-full p-1 border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"/></td>
+                                    <td className="px-6 py-4 whitespace-nowrap"><input type="number" value={sub.theory_hours} onChange={e => handleSubjectChange(index, 'theory_hours', e.target.value)} className="w-full p-1 border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" min={0}/></td>
+                                    <td className="px-6 py-4 whitespace-nowrap"><input type="number" value={sub.lab_hours} onChange={e => handleSubjectChange(index, 'lab_hours', e.target.value)} className="w-full p-1 border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" min={0}/></td>
+                                    <td className="px-6 py-4 whitespace-nowrap"><input type="text" value={sub.theory_faculty} onChange={e => handleSubjectChange(index, 'theory_faculty', e.target.value)} className="w-full p-1 border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"/></td>
+                                    <td className="px-6 py-4 whitespace-nowrap"><input type="text" value={sub.lab_faculty} onChange={e => handleSubjectChange(index, 'lab_faculty', e.target.value)} className="w-full p-1 border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"/></td>
+                                    <td className="px-6 py-4 whitespace-nowrap"><input type="number" value={sub.no_of_batches} onChange={e => handleSubjectChange(index, 'no_of_batches', e.target.value)} className="w-full p-1 border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" min={0}/></td>
+                                </tr>
+                         ))}
                         </tbody>
                     </table>
                 </div>
