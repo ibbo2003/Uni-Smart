@@ -41,41 +41,35 @@ const PERIODS = [
   "3:50-4:45",
 ];
 
-
 function buildScheduleMap(data: TimeSlot[]) {
   const map = new Map<string, TimeSlot[]>();
-  
+
   for (const slot of data) {
     const key = `${slot.day}-${slot.period}`;
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(slot);
   }
-  
-  // Sort slots within each cell for consistent display
+
   for (const [key, arr] of map.entries()) {
     arr.sort((a, b) => {
-      // Order: Theory first (0), Labs (1), Projects (2)
       const order = (t: TimeSlot) => {
-        if (t.subject_type === "PROJ") return 2;
+        if (t.subject_type === "PROJ" || t.subject_type === "MP") return 2;
         return t.is_theory ? 0 : 1;
       };
       const oa = order(a), ob = order(b);
       if (oa !== ob) return oa - ob;
-      
-      // Within same type, sort by batch number
+
       const ba = a.batch_number ?? 0;
       const bb = b.batch_number ?? 0;
       if (ba !== bb) return ba - bb;
-      
-      // Finally by subject code
+
       return a.subject_code.localeCompare(b.subject_code);
     });
     map.set(key, arr);
   }
-  
+
   return map;
 }
-
 
 function isContinuation(
   scheduleMap: Map<string, TimeSlot[]>,
@@ -83,54 +77,50 @@ function isContinuation(
   periodIndex: number
 ) {
   if (periodIndex === 0) return { cont: false, items: [] as TimeSlot[] };
-  
+
   const key = `${dayIndex}-${periodIndex}`;
   const slots = scheduleMap.get(key);
   if (!slots) return { cont: false, items: [] as TimeSlot[] };
-  
+
   const prevKey = `${dayIndex}-${periodIndex - 1}`;
   const prevSlots = scheduleMap.get(prevKey) ?? [];
-  
+
   const contItems: TimeSlot[] = [];
-  
+
   for (const curr of slots) {
     const match = prevSlots.find((p) => {
-      // Project continuity
-      if (curr.subject_type === "PROJ" && p.subject_type === "PROJ") {
+      if ((curr.subject_type === "PROJ" || curr.subject_type === "MP") &&
+        (p.subject_type === "PROJ" || p.subject_type === "MP")) {
         return curr.subject_code === p.subject_code;
       }
-      
-      // Lab continuity (same subject, same batch)
+
       if (!curr.is_theory && !p.is_theory) {
         return (
           curr.subject_code === p.subject_code &&
           (curr.batch_number ?? -1) === (p.batch_number ?? -1)
         );
       }
-      
+
       return false;
     });
-    
+
     if (match) contItems.push(curr);
   }
-  
+
   return { cont: contItems.length > 0, items: contItems };
 }
-
 
 const TimetableGrid = ({ timetableData }: { timetableData: TimeSlot[] }) => {
   const scheduleMap = buildScheduleMap(timetableData);
 
-  
   const getCellBackground = (slots: TimeSlot[]) => {
-    if (slots.some((s) => s.subject_type === "PROJ")) return "bg-amber-50";
+    if (slots.some((s) => s.subject_type === "PROJ" || s.subject_type === "MP")) return "bg-amber-50";
     if (slots.every((s) => !s.is_theory)) return "bg-blue-50";
     return "bg-green-50";
   };
 
-  
   const isParallelLabs = (slots: TimeSlot[]) => {
-    return slots.every((s) => !s.is_theory) && slots.length > 1;
+    return slots.every((s) => !s.is_theory && s.subject_type !== "PROJ" && s.subject_type !== "MP") && slots.length > 1;
   };
 
   return (
@@ -180,12 +170,11 @@ const TimetableGrid = ({ timetableData }: { timetableData: TimeSlot[] }) => {
                       <span className="text-xs text-gray-600">{time}</span>
                     </div>
                   </td>
-                  
+
                   {DAYS.map((_, dayIndex) => {
                     const key = `${dayIndex}-${periodIndex}`;
                     const slots = scheduleMap.get(key);
 
-                    // Empty cell
                     if (!slots || slots.length === 0) {
                       return (
                         <td
@@ -200,9 +189,8 @@ const TimetableGrid = ({ timetableData }: { timetableData: TimeSlot[] }) => {
                     const bgColor = getCellBackground(slots);
                     const contInfo = isContinuation(scheduleMap, dayIndex, periodIndex);
 
-                    // Continuation cell (show simplified info)
                     if (contInfo.cont) {
-                      const isProject = contInfo.items.some((s) => s.subject_type === "PROJ");
+                      const isProject = contInfo.items.some((s) => s.subject_type === "PROJ" || s.subject_type === "MP");
                       return (
                         <td
                           key={key}
@@ -230,7 +218,6 @@ const TimetableGrid = ({ timetableData }: { timetableData: TimeSlot[] }) => {
                       );
                     }
 
-                    // Parallel labs cell
                     if (isParallelLabs(slots)) {
                       return (
                         <td
@@ -269,10 +256,9 @@ const TimetableGrid = ({ timetableData }: { timetableData: TimeSlot[] }) => {
                       );
                     }
 
-                    // Single slot cell (Theory, Lab, or Project)
                     const slot = slots[0];
-                    const isProject = slot.subject_type === "PROJ";
-                    const isLab = !slot.is_theory && slot.subject_type !== "PROJ";
+                    const isProject = slot.subject_type === "PROJ" || slot.subject_type === "MP";
+                    const isLab = !slot.is_theory && !isProject;
 
                     return (
                       <td
@@ -280,7 +266,6 @@ const TimetableGrid = ({ timetableData }: { timetableData: TimeSlot[] }) => {
                         className={`border border-gray-300 p-3 text-xs h-28 align-top ${bgColor}`}
                       >
                         <div className="flex flex-col h-full justify-between">
-                          {/* Header */}
                           <div>
                             <div className="font-bold text-gray-800 text-sm mb-1">
                               {isProject && "📊 "}
@@ -294,10 +279,9 @@ const TimetableGrid = ({ timetableData }: { timetableData: TimeSlot[] }) => {
                             </div>
                           </div>
 
-                          {/* Details */}
                           <div className="space-y-1">
                             <div className="text-xs text-gray-600 font-medium">
-                              👤 {slot.faculty_id}
+                              👤 Prof {slot.faculty_id}
                             </div>
                             <div className="text-xs text-gray-500">
                               {isLab && `🔹 Batch ${slot.batch_number} • `}
@@ -320,7 +304,6 @@ const TimetableGrid = ({ timetableData }: { timetableData: TimeSlot[] }) => {
                   })}
                 </tr>
 
-                {/* Break after Period 1 */}
                 {periodIndex === 1 && (
                   <tr className="bg-orange-100 font-bold text-orange-800">
                     <td colSpan={7} className="text-center p-2 text-sm">
@@ -329,7 +312,6 @@ const TimetableGrid = ({ timetableData }: { timetableData: TimeSlot[] }) => {
                   </tr>
                 )}
 
-                {/* Lunch after Period 3 */}
                 {periodIndex === 3 && (
                   <tr className="bg-orange-100 font-bold text-orange-800">
                     <td colSpan={7} className="text-center p-2 text-sm">
@@ -348,23 +330,41 @@ const TimetableGrid = ({ timetableData }: { timetableData: TimeSlot[] }) => {
         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
           <div className="text-sm font-medium text-green-700">Theory Classes</div>
           <div className="text-2xl font-bold text-green-800">
-            {timetableData.filter((s) => s.is_theory && s.subject_type !== "PROJ").length}
+            {timetableData.filter((s) => s.is_theory && s.subject_type !== "PROJ" && s.subject_type !== "MP").length}
           </div>
         </div>
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="text-sm font-medium text-blue-700">Lab Sessions</div>
           <div className="text-2xl font-bold text-blue-800">
-            {timetableData.filter((s) => !s.is_theory && s.subject_type !== "PROJ").length}
+            {(() => {
+              const labSlots = timetableData.filter((s) => !s.is_theory && s.subject_type !== "PROJ" && s.subject_type !== "MP");
+              const sessionKeys = new Set(
+                labSlots.map(s => `${s.day}-${Math.floor(s.period / 2)}-${s.subject_code}-${s.batch_number}`)
+              );
+              return sessionKeys.size;
+            })()}
+          </div>
+          <div className="text-xs text-blue-600 mt-1">
+            ({timetableData.filter((s) => !s.is_theory && s.subject_type !== "PROJ" && s.subject_type !== "MP").length} total hours)
           </div>
         </div>
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-          <div className="text-sm font-medium text-amber-700">Project Hours</div>
+          <div className="text-sm font-medium text-amber-700">Project Sessions</div>
           <div className="text-2xl font-bold text-amber-800">
-            {timetableData.filter((s) => s.subject_type === "PROJ").length}
+            {(() => {
+              const projectSlots = timetableData.filter((s) => s.subject_type === "PROJ" || s.subject_type === "MP");
+              const projectSessions = new Set(
+                projectSlots.map(s => `${s.day}-${s.subject_code}`)
+              );
+              return projectSessions.size;
+            })()}
+          </div>
+          <div className="text-xs text-amber-600 mt-1">
+            ({timetableData.filter((s) => s.subject_type === "PROJ" || s.subject_type === "MP").length} total hours)
           </div>
         </div>
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <div className="text-sm font-medium text-gray-700">Total Periods</div>
+          <div className="text-sm font-medium text-gray-700">Total Periods Used</div>
           <div className="text-2xl font-bold text-gray-800">
             {new Set(timetableData.map((s) => `${s.day}-${s.period}`)).size}
           </div>
@@ -373,7 +373,6 @@ const TimetableGrid = ({ timetableData }: { timetableData: TimeSlot[] }) => {
     </div>
   );
 };
-
 
 export default function TimetablePage() {
   const [semester, setSemester] = useState("");
@@ -392,7 +391,6 @@ export default function TimetablePage() {
   } | null>(null);
   const timetableRef = useRef<HTMLDivElement>(null);
 
-  // Fetch available timetables on mount
   useEffect(() => {
     const fetchAvailable = async () => {
       try {
@@ -455,7 +453,6 @@ export default function TimetablePage() {
     setTimetableToDisplay([]);
     setGenerationStats(null);
 
-    // Validate subjects
     if (subjects.length === 0) {
       setMessage({ type: "error", text: "Please add at least one subject." });
       setIsGenerating(false);
@@ -487,7 +484,6 @@ export default function TimetablePage() {
         });
       }
 
-      // Scroll to timetable
       setTimeout(() => {
         timetableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 100);
@@ -528,64 +524,66 @@ export default function TimetablePage() {
   };
 
   
-  const handleExport = async (format: 'pdf' | 'word' | 'excel') => {
+  const handleExport = async (format: "pdf" | "word" | "excel") => {
     if (timetableToDisplay.length === 0) {
-      setMessage({ type: 'error', text: 'Please generate or load a timetable first' });
+      setMessage({ type: "error", text: "Please generate or load a timetable first" });
       return;
     }
-    
-    // Determine section ID from current state or selectedTimetable
-    const sectionId = selectedTimetable || `${semester}_${section}`;
-    
-    if (!sectionId || sectionId === '_') {
-      setMessage({ type: 'error', text: 'Unable to determine section ID for export' });
+
+    // Prefer the section_id from the actual timetable rows
+    const sectionIdFromData = timetableToDisplay[0]?.section_id;
+    const fallbackSectionId = selectedTimetable || `${semester}_${section}`;
+    const sectionId = sectionIdFromData || fallbackSectionId;
+
+    if (!sectionId || sectionId === "_") {
+      setMessage({ type: "error", text: "Unable to determine section ID for export" });
       return;
     }
-    
+
     try {
-      setMessage({ type: 'info', text: `Generating ${format.toUpperCase()} file...` });
-      
+      setMessage({ type: "info", text: `Generating ${format.toUpperCase()} file...` });
+
       const response = await fetch(
-        `http://localhost:8080/api/timetable/${sectionId}/export/${format}`
+        `http://localhost:8080/api/timetable/${encodeURIComponent(sectionId)}/export/${format}`
       );
-      
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Export failed');
+        let errorMessage = "Export failed";
+        try {
+          const errorData = await response.json();
+          if (errorData?.message) errorMessage = errorData.message;
+        } catch {
+          
+        }
+        throw new Error(errorMessage);
       }
-      
-      // Get the blob
+
       const blob = await response.blob();
-      
-      // Create download link
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      
-      // Set filename with correct extension
-      const extension = format === 'word' ? 'docx' : format === 'excel' ? 'xlsx' : 'pdf';
+
+      const extension = format === "word" ? "docx" : format === "excel" ? "xlsx" : "pdf";
       a.download = `Timetable_${sectionId}.${extension}`;
-      
-      // Trigger download
+
       document.body.appendChild(a);
       a.click();
-      
-      // Cleanup
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-      
-      setMessage({ 
-        type: 'success', 
-        text: `${format.toUpperCase()} exported successfully!` 
+
+      setMessage({
+        type: "success",
+        text: `${format.toUpperCase()} exported successfully!`,
       });
     } catch (error: any) {
-      console.error('Export error:', error);
-      setMessage({ 
-        type: 'error', 
-        text: `Failed to export: ${error.message}` 
+      console.error("Export error:", error);
+      setMessage({
+        type: "error",
+        text: `Failed to export: ${error.message}`,
       });
     }
   };
+
   return (
     <main className="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -906,93 +904,69 @@ export default function TimetablePage() {
               <TimetableGrid timetableData={timetableToDisplay} />
             </div>
           )}
+
+          {/* EXPORT BUTTONS SECTION */}
           {timetableToDisplay.length > 0 && (
-  <div className="mt-8 bg-white p-6 rounded-lg shadow-md border border-gray-200">
-    <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-      <span>📥</span> Export Timetable
-    </h3>
-    <p className="text-sm text-gray-600 mb-4">
-      Download the generated timetable in your preferred format
-    </p>
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <button
-        onClick={() => handleExport('pdf')}
-        className="flex items-center justify-center gap-3 bg-red-600 text-white px-6 py-4 rounded-lg font-semibold hover:bg-red-700 transition-all transform hover:scale-105 shadow-md"
-      >
-        <svg 
-          className="w-6 h-6" 
-          fill="none" 
-          stroke="currentColor" 
-          viewBox="0 0 24 24"
-        >
-          <path 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            strokeWidth={2} 
-            d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" 
-          />
-        </svg>
-        <div className="text-left">
-          <div className="font-bold">Export as PDF</div>
-          <div className="text-xs opacity-90">Print-ready format</div>
-        </div>
-      </button>
+            <div className="mt-8 bg-white p-6 rounded-lg shadow-md border border-gray-200">
+              <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <span>📥</span> Export Timetable
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Download the generated timetable in your preferred format
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* PDF Export Button */}
+                <button
+                  onClick={() => handleExport("pdf")}
+                  className="flex items-center justify-center gap-3 bg-red-600 text-white px-6 py-4 rounded-lg font-semibold hover:bg-red-700 transition-all transform hover:scale-105 shadow-md"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  <div className="text-left">
+                    <div className="font-bold">Export as PDF</div>
+                    <div className="text-xs opacity-90">Print-ready format</div>
+                  </div>
+                </button>
 
-      <button
-        onClick={() => handleExport('word')}
-        className="flex items-center justify-center gap-3 bg-blue-600 text-white px-6 py-4 rounded-lg font-semibold hover:bg-blue-700 transition-all transform hover:scale-105 shadow-md"
-      >
-        <svg 
-          className="w-6 h-6" 
-          fill="none" 
-          stroke="currentColor" 
-          viewBox="0 0 24 24"
-        >
-          <path 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            strokeWidth={2} 
-            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" 
-          />
-        </svg>
-        <div className="text-left">
-          <div className="font-bold">Export as Word</div>
-          <div className="text-xs opacity-90">Editable document</div>
-        </div>
-      </button>
+                {/* Word Export Button */}
+                <button
+                  onClick={() => handleExport("word")}
+                  className="flex items-center justify-center gap-3 bg-blue-600 text-white px-6 py-4 rounded-lg font-semibold hover:bg-blue-700 transition-all transform hover:scale-105 shadow-md"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <div className="text-left">
+                    <div className="font-bold">Export as Word</div>
+                    <div className="text-xs opacity-90">Editable document</div>
+                  </div>
+                </button>
 
-      <button
-        onClick={() => handleExport('excel')}
-        className="flex items-center justify-center gap-3 bg-green-600 text-white px-6 py-4 rounded-lg font-semibold hover:bg-green-700 transition-all transform hover:scale-105 shadow-md"
-      >
-        <svg 
-          className="w-6 h-6" 
-          fill="none" 
-          stroke="currentColor" 
-          viewBox="0 0 24 24"
-        >
-          <path 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            strokeWidth={2} 
-            d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" 
-          />
-        </svg>
-        <div className="text-left">
-          <div className="font-bold">Export as Excel</div>
-          <div className="text-xs opacity-90">Spreadsheet format</div>
-        </div>
-      </button>
-    </div>
+                {/* Excel Export Button */}
+                <button
+                  onClick={() => handleExport("excel")}
+                  className="flex items-center justify-center gap-3 bg-green-600 text-white px-6 py-4 rounded-lg font-semibold hover:bg-green-700 transition-all transform hover:scale-105 shadow-md"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  <div className="text-left">
+                    <div className="font-bold">Export as Excel</div>
+                    <div className="text-xs opacity-90">Spreadsheet format</div>
+                  </div>
+                </button>
+              </div>
 
-    {/* Quick tips */}
-    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-      <p className="text-xs text-blue-800">
-        <strong>💡 Tip:</strong> PDF is best for printing, Word for editing, and Excel for data analysis.
-      </p>
-    </div>
-  </div>
-)}
+              {/* Quick tips */}
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-xs text-blue-800">
+                  <strong>💡 Tip:</strong> PDF is best for printing, Word for editing, and Excel for data analysis.
+                </p>
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
     </main>

@@ -1,0 +1,940 @@
+{
+  "info": {
+    "name": "UniSmart Result Analysis API",
+    "description": "Complete API collection for UniSmart VTU Result Analysis System\n\n**Features:**\n- JWT Authentication\n- Student Management\n- Result Scraping\n- Analytics\n- System Settings Management\n\n**Version:** 2.0\n**Updated:** November 2025\n\n**Setup:**\n1. Import this collection\n2. Set up environment variables (see Variables tab)\n3. Run 'Login' request to get token\n4. Token will auto-update in environment",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "unismart-api"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🔐 Authentication",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Save tokens to environment",
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set('access_token', jsonData.access);",
+                  "    pm.collectionVariables.set('refresh_token', jsonData.refresh);",
+                  "    console.log('✓ Tokens saved successfully');",
+                  "} else {",
+                  "    console.log('✗ Login failed');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login", ""]
+            },
+            "description": "Obtain JWT access and refresh tokens.\n\n**Body:**\n- username: Your username\n- password: Your password\n\n**Response:**\n- access: JWT access token (valid 60 min)\n- refresh: JWT refresh token (valid 1 day)"
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Update access token",
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set('access_token', jsonData.access);",
+                  "    console.log('✓ Access token refreshed');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/refresh/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "refresh", ""]
+            },
+            "description": "Refresh access token using refresh token"
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{access_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/verify/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "verify", ""]
+            },
+            "description": "Verify if token is valid"
+          },
+          "response": []
+        }
+      ],
+      "description": "JWT authentication endpoints"
+    },
+    {
+      "name": "👥 Students",
+      "item": [
+        {
+          "name": "List Students",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/students/?page=1&page_size=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "students", ""],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "50"
+                },
+                {
+                  "key": "search",
+                  "value": "John",
+                  "disabled": true
+                },
+                {
+                  "key": "department",
+                  "value": "dept-uuid",
+                  "disabled": true
+                },
+                {
+                  "key": "current_semester",
+                  "value": "5",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get list of students with pagination and filters"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Student Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/students/:id/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "students", ":id", ""],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "student-uuid"
+                }
+              ]
+            },
+            "description": "Get detailed information for a specific student"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Student Results",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/students/:id/results/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "students", ":id", "results", ""],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "student-uuid"
+                }
+              ]
+            },
+            "description": "Get student results grouped by semester"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Student Analytics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/students/:id/analytics/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "students", ":id", "analytics", ""],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "student-uuid"
+                }
+              ]
+            },
+            "description": "Get student analytics: CGPA, SGPA, backlogs, grade distribution"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Student Transcript",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/students/:id/transcript/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "students", ":id", "transcript", ""],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "student-uuid"
+                }
+              ]
+            },
+            "description": "Get full academic transcript"
+          },
+          "response": []
+        }
+      ],
+      "description": "Student management endpoints"
+    },
+    {
+      "name": "🏢 Departments",
+      "item": [
+        {
+          "name": "List Departments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/departments/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "departments", ""]
+            },
+            "description": "Get list of all departments"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Department Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/departments/:id/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "departments", ":id", ""],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "dept-uuid"
+                }
+              ]
+            },
+            "description": "Get department details"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Department Students",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/departments/:id/students/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "departments", ":id", "students", ""],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "dept-uuid"
+                }
+              ]
+            },
+            "description": "Get all students in department"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Department Performance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/departments/:id/performance/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "departments", ":id", "performance", ""],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "dept-uuid"
+                }
+              ]
+            },
+            "description": "Get department performance analytics"
+          },
+          "response": []
+        }
+      ],
+      "description": "Department management endpoints"
+    },
+    {
+      "name": "📚 Subjects",
+      "item": [
+        {
+          "name": "List Subjects",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/subjects/?subject_type=THEORY",
+              "host": ["{{base_url}}"],
+              "path": ["api", "subjects", ""],
+              "query": [
+                {
+                  "key": "subject_type",
+                  "value": "THEORY"
+                },
+                {
+                  "key": "department",
+                  "value": "dept-uuid",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "Database",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get list of subjects\n\n**Subject Types:**\n- THEORY\n- LAB\n- PROJECT\n- INTERNSHIP\n- SEMINAR\n- NON_CREDIT\n- AUDIT"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Subject Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/subjects/:id/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "subjects", ":id", ""],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "subject-uuid"
+                }
+              ]
+            },
+            "description": "Get subject details"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Subject Analytics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/subjects/:id/analytics/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "subjects", ":id", "analytics", ""],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "subject-uuid"
+                }
+              ]
+            },
+            "description": "Get subject performance analytics"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Subject (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"BCS601\",\n  \"name\": \"Compiler Design\",\n  \"short_name\": \"CD\",\n  \"subject_type\": \"THEORY\",\n  \"credits\": 4,\n  \"max_internal_marks\": 20,\n  \"max_external_marks\": 80,\n  \"department\": \"dept-uuid\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/subjects/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "subjects", ""]
+            },
+            "description": "Create new subject (Admin only)"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Audit Course (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"BES\",\n  \"name\": \"Environmental Studies\",\n  \"short_name\": \"Environmental\",\n  \"subject_type\": \"AUDIT\",\n  \"credits\": 1,\n  \"department\": \"dept-uuid\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/subjects/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "subjects", ""]
+            },
+            "description": "Create Audit Course\n\n**Note:** Audit courses:\n- Have credits (typically 1)\n- Are NOT included in CGPA\n- Marks auto-configured: 100 internal, 0 external"
+          },
+          "response": []
+        }
+      ],
+      "description": "Subject management endpoints"
+    },
+    {
+      "name": "📊 Results",
+      "item": [
+        {
+          "name": "List Results",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/results/?semester=5",
+              "host": ["{{base_url}}"],
+              "path": ["api", "results", ""],
+              "query": [
+                {
+                  "key": "semester",
+                  "value": "5"
+                },
+                {
+                  "key": "student",
+                  "value": "student-uuid",
+                  "disabled": true
+                },
+                {
+                  "key": "subject",
+                  "value": "subject-uuid",
+                  "disabled": true
+                },
+                {
+                  "key": "result_status",
+                  "value": "P",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get list of results with filters"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Result Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/results/:id/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "results", ":id", ""],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "result-uuid"
+                }
+              ]
+            },
+            "description": "Get result details"
+          },
+          "response": []
+        }
+      ],
+      "description": "Result management endpoints"
+    },
+    {
+      "name": "🔍 Scraper (Admin Only)",
+      "item": [
+        {
+          "name": "Scrape Single USN",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Scrape successful', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql('SUCCESS');",
+                  "    console.log('Records created:', jsonData.records_created);",
+                  "    console.log('Execution time:', jsonData.execution_time, 'seconds');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usn\": \"2AB22CS008\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/scraper/scrape/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "scraper", "scrape", ""]
+            },
+            "description": "Scrape results for single USN\n\n**Note:** Requires admin role"
+          },
+          "response": []
+        },
+        {
+          "name": "Scrape Multiple USNs",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usn_list\": [\n    \"2AB22CS008\",\n    \"2AB22CS009\",\n    \"2AB22CS010\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/scraper/scrape/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "scraper", "scrape", ""]
+            },
+            "description": "Scrape results for multiple USNs\n\n**Note:** Batch processing"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Scrape Logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/scraper/logs/?status=SUCCESS",
+              "host": ["{{base_url}}"],
+              "path": ["api", "scraper", "logs", ""],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "SUCCESS"
+                },
+                {
+                  "key": "usn",
+                  "value": "2AB22CS008",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get scraping operation logs"
+          },
+          "response": []
+        }
+      ],
+      "description": "Result scraping endpoints (Admin only)"
+    },
+    {
+      "name": "📈 Analytics",
+      "item": [
+        {
+          "name": "Dashboard Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/analytics/dashboard/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analytics", "dashboard", ""]
+            },
+            "description": "Get role-based dashboard statistics\n\n**Admin:** All system stats\n**Faculty:** Department stats\n**Student:** Personal stats"
+          },
+          "response": []
+        },
+        {
+          "name": "Subject Analytics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/analytics/subject/?subject_code=BCS601&semester=6",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analytics", "subject", ""],
+              "query": [
+                {
+                  "key": "subject_code",
+                  "value": "BCS601"
+                },
+                {
+                  "key": "semester",
+                  "value": "6"
+                }
+              ]
+            },
+            "description": "Get subject performance analytics"
+          },
+          "response": []
+        },
+        {
+          "name": "Batch Analytics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/analytics/batch/?batch=2022&department=dept-uuid",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analytics", "batch", ""],
+              "query": [
+                {
+                  "key": "batch",
+                  "value": "2022"
+                },
+                {
+                  "key": "department",
+                  "value": "dept-uuid"
+                }
+              ]
+            },
+            "description": "Get batch performance analytics"
+          },
+          "response": []
+        },
+        {
+          "name": "Department Overview",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/analytics/department/?department=dept-uuid&semester=6",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analytics", "department", ""],
+              "query": [
+                {
+                  "key": "department",
+                  "value": "dept-uuid"
+                },
+                {
+                  "key": "semester",
+                  "value": "6"
+                }
+              ]
+            },
+            "description": "Get department-wide analytics"
+          },
+          "response": []
+        },
+        {
+          "name": "Student Comparison",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usns\": [\n    \"2AB22CS008\",\n    \"2AB22CS062\"\n  ],\n  \"semester\": 6\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/analytics/compare/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analytics", "compare", ""]
+            },
+            "description": "Compare multiple students"
+          },
+          "response": []
+        }
+      ],
+      "description": "Analytics and reporting endpoints"
+    },
+    {
+      "name": "⚙️ System Settings (Admin Only) ⭐",
+      "item": [
+        {
+          "name": "Get All Settings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/settings/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "settings", ""]
+            },
+            "description": "Get all system settings\n\n**NEW in v2.0**\n\nReturns all configuration settings including VTU URL"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/settings/",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "settings", ""]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "[\n  {\n    \"key\": \"VTU_RESULTS_URL\",\n    \"value\": \"https://results.vtu.ac.in/JJEcbcs25/index.php\",\n    \"description\": \"Current VTU Results Portal URL (updates every semester)\",\n    \"updated_at\": \"2025-11-10T00:00:00Z\",\n    \"updated_by\": \"admin\"\n  }\n]"
+            }
+          ]
+        },
+        {
+          "name": "Get VTU Portal URL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('VTU URL exists', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.url).to.exist;",
+                  "    console.log('Current VTU URL:', jsonData.url);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/settings/vtu-link/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "settings", "vtu-link", ""]
+            },
+            "description": "Get current VTU results portal URL\n\n**NEW in v2.0**\n\nReturns:\n- url: Current VTU portal URL\n- last_updated: Timestamp\n- updated_by: Username who updated"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/settings/vtu-link/",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "settings", "vtu-link", ""]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"url\": \"https://results.vtu.ac.in/JJEcbcs25/index.php\",\n  \"last_updated\": \"2025-11-10T00:00:00Z\",\n  \"updated_by\": \"admin\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update VTU Portal URL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('URL updated successfully', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.message).to.include('updated successfully');",
+                  "    console.log('New URL:', jsonData.url);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://results.vtu.ac.in/JJEcbcs26/index.php\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/settings/vtu-link/update/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "settings", "vtu-link", "update", ""]
+            },
+            "description": "Update VTU results portal URL\n\n**NEW in v2.0**\n**Admin Only**\n\n**Use Case:** When VTU changes semester portal URL\n\n**Example:**\n- Old: JJEcbcs25 (Jan-June 2025)\n- New: JJEcbcs26 (July-Dec 2025)\n\n**Note:** No server restart needed!"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"url\": \"https://results.vtu.ac.in/JJEcbcs26/index.php\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/settings/vtu-link/update/",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "settings", "vtu-link", "update", ""]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"message\": \"VTU URL updated successfully\",\n  \"url\": \"https://results.vtu.ac.in/JJEcbcs26/index.php\",\n  \"updated_by\": \"admin\"\n}"
+            },
+            {
+              "name": "Invalid URL Format",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"url\": \"https://invalid.com/results\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/settings/vtu-link/update/",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "settings", "vtu-link", "update", ""]
+                }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"error\": \"Invalid VTU URL format. Must start with https://results.vtu.ac.in/\"\n}"
+            }
+          ]
+        }
+      ],
+      "description": "System Settings management endpoints\n\n**NEW in v2.0**\n\n**Features:**\n- Dynamic VTU portal URL management\n- No code changes needed\n- Zero downtime updates\n- Admin only access\n\n**Use Case:**\nUpdate VTU URL when semester changes (e.g., JJEcbcs25 → JJEcbcs26)"
+    }
+  ]
+}
