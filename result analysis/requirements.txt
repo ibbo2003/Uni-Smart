@@ -1,0 +1,52 @@
+# Django Core
+Django==5.1.4
+python-dotenv==1.0.1
+
+# Django REST Framework
+djangorestframework==3.15.2
+djangorestframework-simplejwt==5.3.1
+
+# Database (PyMySQL is easier to install on Windows than mysqlclient)
+PyMySQL==1.1.1
+
+# CORS
+django-cors-headers==4.6.0
+
+# Filtering
+django-filter==24.3
+
+# Web Scraping
+selenium==4.27.1
+webdriver-manager==4.0.2
+beautifulsoup4==4.12.3
+
+# Image Processing & OCR (Python 3.13 compatible versions)
+opencv-python==4.10.0.84
+easyocr==1.7.2
+Pillow==11.0.0
+numpy==2.2.0
+torch==2.5.1
+torchvision==0.20.1
+
+# Excel/CSV Export
+openpyxl==3.1.5
+pandas==2.2.3
+xlsxwriter==3.2.0
+
+# PDF Generation (optional)
+reportlab==4.2.5
+
+# Utilities
+python-dateutil==2.9.0
+pytz==2024.2
+
+# Testing (optional)
+pytest==8.3.4
+pytest-django==4.9.0
+
+# Code Quality (optional)
+flake8==7.1.1
+
+# Production Server (optional)
+gunicorn==23.0.0
+whitenoise==6.8.2
