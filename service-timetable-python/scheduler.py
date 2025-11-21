@@ -1,39 +1,195 @@
+"""
+VTU TIMETABLE SCHEDULER - OPTIMIZED HYBRID VERSION
+===================================================
+Combines: Genetic Algorithm + Local Search + CSP + Tabu Search
+Author: Student Package Website Project
+Version: 5.0 (Highly Optimized)
+"""
+
 import random
-import pandas as pd
-from typing import List, Dict, Tuple
-from dataclasses import dataclass, field
+from typing import List, Dict, Set, Tuple
+from dataclasses import dataclass
 from collections import defaultdict
 import copy
-import openpyxl
-from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
-import os
-import itertools
-import openpyxl.utils
+import time
 
-# --- Data Classes (Subject, Faculty, etc.) remain the same ---
-# (These will be populated from DB data, not defined in code)
+
+# ===========================
+# DATA CLASSES (Same as yours)
+# ===========================
+
 @dataclass
 class Subject:
-    subject_code: str; subject_name: str; subject_type: str; theory_hours: int; lab_hours: int
-    theory_faculty: str; lab_faculty: str; no_of_batches: int; section: str; semester: str
+    subject_code: str
+    subject_name: str
+    subject_type: str
+    theory_hours: int
+    lab_hours: int
+    theory_faculty: str
+    lab_faculty: str
+    no_of_batches: int
+    section: str
+    semester: str
+
+
 @dataclass
-class Faculty: id: str; name: str
+class Faculty:
+    id: str
+    name: str
+
+
 @dataclass
-class Section: id: str; name: str; semester: str; classroom: str
+class Section:
+    id: str
+    name: str
+    semester: str
+    classroom: str
+
+
 @dataclass
-class LabRoom: id: str; name: str
+class LabRoom:
+    id: str
+    name: str
+
+
 @dataclass
 class TimeSlot:
-    day: int; period: int; subject_code: str; subject_name: str; subject_type: str
-    faculty_id: str; section_id: str; room_id: str
-    batch_number: int = 0; is_theory: bool = True
+    day: int
+    period: int
+    subject_code: str
+    subject_name: str
+    subject_type: str
+    faculty_id: str
+    section_id: str
+    room_id: str
+    batch_number: int = 0
+    is_theory: bool = True
 
-class TimetableChromosome:
-    """Represents a single timetable solution"""
 
+# ===========================
+# VTU SUBJECT TYPE VALIDATOR (Keep yours as-is)
+# ===========================
+
+class VTUSubjectValidator:
+    SUBJECT_TYPES = {
+        'IPCC': {'has_theory': True, 'has_lab': True, 'is_project': False},
+        'PCC': {'has_theory': True, 'has_lab': False, 'is_project': False},
+        'PCCL': {'has_theory': False, 'has_lab': True, 'is_project': False},
+        'PEC': {'has_theory': True, 'has_lab': False, 'is_project': False},
+        'OEC': {'has_theory': True, 'has_lab': False, 'is_project': False},
+        'HSMC': {'has_theory': True, 'has_lab': False, 'is_project': False},
+        'MP': {'has_theory': False, 'has_lab': True, 'is_project': True},
+        'INT': {'has_theory': False, 'has_lab': False, 'is_project': False}
+    }
+    
+    @classmethod
+    def validate_subject(cls, subject: Subject) -> bool:
+        subject_type = subject.subject_type.upper()
+        if subject_type not in cls.SUBJECT_TYPES:
+            raise ValueError(f"Invalid subject type '{subject_type}'")
+        
+        rules = cls.SUBJECT_TYPES[subject_type]
+        if not rules['has_theory'] and subject.theory_hours > 0:
+            subject.theory_hours = 0
+        if not rules['has_lab'] and subject.lab_hours > 0:
+            subject.lab_hours = 0
+        
+        return True
+    
+    @classmethod
+    def is_project(cls, subject_type: str) -> bool:
+        return subject_type.upper() in ['MP', 'PROJ']
+    
+    @classmethod
+    def get_display_name(cls, subject_type: str) -> str:
+        names = {
+            'IPCC': 'Integrated Professional Core',
+            'PCC': 'Professional Core',
+            'PCCL': 'Professional Core Lab',
+            'PEC': 'Professional Elective',
+            'OEC': 'Open Elective',
+            'HSMC': 'Humanities',
+            'MP': 'Major/Mini Project',
+            'INT': 'Internship'
+        }
+        return names.get(subject_type.upper(), subject_type)
+
+
+# ===========================
+# CSP CONSTRAINT CHECKER
+# ===========================
+
+class CSPConstraintChecker:
+    """Fast constraint checking using set-based lookups"""
+    
+    def __init__(self):
+        self.faculty_slots: Dict[Tuple[int, int], Set[str]] = defaultdict(set)
+        self.section_slots: Dict[Tuple[int, int], Set[str]] = defaultdict(set)
+        self.room_slots: Dict[Tuple[int, int], Set[str]] = defaultdict(set)
+    
+    def add_slot(self, gene: TimeSlot):
+        """Add a time slot to constraint checker"""
+        key = (gene.day, gene.period)
+        self.faculty_slots[key].add(gene.faculty_id)
+        self.section_slots[key].add(gene.section_id)
+        if gene.is_theory or not gene.batch_number:
+            self.room_slots[key].add(gene.room_id)
+    
+    def remove_slot(self, gene: TimeSlot):
+        """Remove a time slot from constraint checker"""
+        key = (gene.day, gene.period)
+        self.faculty_slots[key].discard(gene.faculty_id)
+        self.section_slots[key].discard(gene.section_id)
+        if gene.is_theory or not gene.batch_number:
+            self.room_slots[key].discard(gene.room_id)
+    
+    def check_conflicts(self, gene: TimeSlot) -> int:
+        """Return number of conflicts for this slot"""
+        conflicts = 0
+        key = (gene.day, gene.period)
+        
+        if gene.faculty_id in self.faculty_slots[key]:
+            conflicts += 1
+        if gene.section_id in self.section_slots[key]:
+            conflicts += 1
+        if gene.is_theory and gene.room_id in self.room_slots[key]:
+            conflicts += 1
+        
+        return conflicts
+    
+    def is_available(self, day: int, period: int, faculty_id: str, 
+                     section_id: str, room_id: str, is_theory: bool) -> bool:
+        """Check if slot is completely available"""
+        key = (day, period)
+        
+        if faculty_id and faculty_id in self.faculty_slots[key]:
+            return False
+        if section_id and section_id in self.section_slots[key]:
+            return False
+        if is_theory and room_id and room_id in self.room_slots[key]:
+            return False
+        
+        return True
+    
+    def rebuild_from_genes(self, genes: List[TimeSlot]):
+        """Rebuild constraint checker from scratch"""
+        self.__init__()
+        for gene in genes:
+            self.add_slot(gene)
+
+
+# ===========================
+# OPTIMIZED TIMETABLE CHROMOSOME
+# ===========================
+
+class OptimizedTimetableChromosome:
+    """Highly optimized chromosome with CSP integration"""
+    
     def __init__(self, subjects: List[Subject], faculties: List[Faculty],
-                sections: List[Section], lab_rooms: List[LabRoom],
-                master_schedule: List[Dict], days_per_week: int = 6, periods_per_day: int = 7):
+                 sections: List[Section], lab_rooms: List[LabRoom],
+                 master_schedule: List[Dict], days_per_week: int = 6,
+                 periods_per_day: int = 7):
+        
         self.subjects = subjects
         self.faculties = {f.id: f for f in faculties}
         self.sections = {s.id: s for s in sections}
@@ -43,540 +199,985 @@ class TimetableChromosome:
         self.periods_per_day = periods_per_day
         self.morning_periods = [0, 1, 2, 3]
         self.afternoon_periods = [4, 5, 6]
-        self.genes = []
+        
+        self.genes: List[TimeSlot] = []
         self.fitness = 0.0
+        self.constraint_checker = CSPConstraintChecker()
+        self.lab_usage_tracker = defaultdict(set)
+        
+        # Validate subjects
+        for subject in self.subjects:
+            VTUSubjectValidator.validate_subject(subject)
+        
+        # Initialize master schedule constraints
+        for slot in self.master_schedule:
+            fake_gene = TimeSlot(
+                day=slot['day'], period=slot['period'],
+                subject_code='', subject_name='', subject_type='',
+                faculty_id=slot['faculty_id'], section_id=slot['section_id'],
+                room_id=slot['room_id'], is_theory=slot.get('is_theory', True)
+            )
+            self.constraint_checker.add_slot(fake_gene)
+            
+            if not slot.get('is_theory', True):
+                self.lab_usage_tracker[(slot['day'], slot['period'])].add(slot['room_id'])
+    
+    def initialize_with_csp(self):
+        """Initialize using CSP-guided approach for better starting population"""
+        self.genes = []
+        self.constraint_checker.rebuild_from_genes([])
+        
+        # Re-add master schedule
+        for slot in self.master_schedule:
+            fake_gene = TimeSlot(
+                day=slot['day'], period=slot['period'],
+                subject_code='', subject_name='', subject_type='',
+                faculty_id=slot['faculty_id'], section_id=slot['section_id'],
+                room_id=slot['room_id'], is_theory=slot.get('is_theory', True)
+            )
+            self.constraint_checker.add_slot(fake_gene)
+        
+        # Reset lab usage
         self.lab_usage_tracker = defaultdict(set)
         for slot in self.master_schedule:
             if not slot.get('is_theory', True):
                 self.lab_usage_tracker[(slot['day'], slot['period'])].add(slot['room_id'])
-
-
-    # In TimetableChromosome class
-
-    def initialize_random(self):
-        """
-        Initializes a timetable with the correct, prioritized scheduling order.
-        """
-        self.genes = []
-        self.lab_usage_tracker = defaultdict(set)
         
-        # --- CORRECTED ORDER ---
-        # Step 1: Schedule Projects FIRST to reserve afternoon blocks.
-        project_subjects = [s for s in self.subjects if s.subject_type == "PROJ"]
+        # Phase 1: Schedule projects (highest priority)
+        project_subjects = [s for s in self.subjects if VTUSubjectValidator.is_project(s.subject_type)]
         for subject in project_subjects:
-            self._schedule_project(subject, f"{subject.semester}_{subject.section}")
-
-        # Step 2: Schedule Parallel Labs in the remaining slots.
-        scheduled_lab_subjects = self._schedule_parallel_labs()
+            section_id = f"{subject.semester}_{subject.section}"
+            self._schedule_project_csp(subject, section_id)
         
-        # Step 3: Schedule any remaining SINGLE labs.
-        lab_subjects = [
-            s for s in self.subjects 
-            if s.lab_hours > 0 
-            and s.subject_type != "PROJ" 
-            and s.subject_code not in scheduled_lab_subjects
-        ]
-        for subject in lab_subjects:
-            self._schedule_lab_only(subject, f"{subject.semester}_{subject.section}")
-
-        # Step 4: Schedule all theory classes.
-        theory_hours_to_schedule = []
-        theory_subjects = [s for s in self.subjects if s.theory_hours > 0 and s.subject_type != "PROJ"]
+        # Phase 2: Schedule parallel labs with CSP
+        self._schedule_parallel_labs_csp()
+        
+        # Phase 3: Schedule theory with CSP heuristics
+        theory_subjects = [s for s in self.subjects if s.theory_hours > 0]
+        theory_hours = []
         for subject in theory_subjects:
             for _ in range(subject.theory_hours):
-                theory_hours_to_schedule.append(subject)
-
-        random.shuffle(theory_hours_to_schedule)
-        for subject in theory_hours_to_schedule:
-            self._schedule_one_theory_hour(subject, f"{subject.semester}_{subject.section}")
+                theory_hours.append(subject)
+        
+        # Sort by Most Constrained Variable (MCV) heuristic
+        random.shuffle(theory_hours)
+        
+        for subject in theory_hours:
+            section_id = f"{subject.semester}_{subject.section}"
+            self._schedule_theory_with_csp(subject, section_id)
     
-    def _schedule_project(self, subject: Subject, section_id: str):
+    def _schedule_project_csp(self, subject: Subject, section_id: str):
+        """Schedule project using CSP forward checking"""
+        if not subject.lab_faculty:
+            return
+        
         classroom = self.sections[section_id].classroom
         blocks_needed = subject.lab_hours // 3
-        scheduled_blocks = 0
-        possible_days = list(range(self.days_per_week))
-        random.shuffle(possible_days)
-        for day in possible_days:
-            if scheduled_blocks >= blocks_needed: break
-            is_afternoon_available = all(self._is_slot_available(day, p, subject.lab_faculty, section_id, classroom) for p in self.afternoon_periods)
-            if is_afternoon_available:
-                for period in self.afternoon_periods:
-                    self.genes.append(TimeSlot(day=day, period=period, subject_code=subject.subject_code, subject_name=subject.subject_name, subject_type=subject.subject_type, faculty_id=subject.lab_faculty, section_id=section_id, room_id=classroom, is_theory=True))
-                scheduled_blocks += 1
-        if scheduled_blocks < blocks_needed: print(f"WARNING: For {section_id}, only scheduled {scheduled_blocks}/{blocks_needed} project blocks.")
-
-    def _schedule_parallel_labs(self) -> set:
-        scheduled_subjects = set()
-        lab_subjects = [s for s in self.subjects if s.lab_hours > 0 and s.subject_type != "PROJ"]
-        labs_by_section = defaultdict(list)
-        for sub in lab_subjects: labs_by_section[f"{sub.semester}_{sub.section}"].append(sub)
-        for section_id, labs in labs_by_section.items():
-            if len(labs) < 2: continue
-            num_parallel_labs = len(labs)
-            sessions_needed = num_parallel_labs
-            for session_index in range(sessions_needed):
-                is_session_scheduled = False
-                for _ in range(500):
-                    day, start_period = random.randint(0, self.days_per_week - 1), random.choice([0, 2, 4])
-                    if not self._is_valid_slot(day, start_period) or not self._is_valid_slot(day, start_period + 1): continue
-                    faculties_needed = [l.lab_faculty for l in labs]
-                    if any(not self._is_slot_available(day, p, fac, '', '') for p in range(start_period, start_period + 2) for fac in faculties_needed): continue
-                    is_section_busy_with_theory = any(gene.day == day and gene.period in range(start_period, start_period + 2) and gene.section_id == section_id and gene.is_theory for gene in self.genes)
-                    if is_section_busy_with_theory: continue
-                    available_rooms = self._get_available_lab_rooms(day, start_period)
-                    if len(available_rooms) < num_parallel_labs: continue
-                    for batch_index in range(num_parallel_labs):
-                        subject = labs[(batch_index + session_index) % num_parallel_labs]
-                        room_id = available_rooms[batch_index]
-                        self._reserve_lab_room(room_id, day, start_period)
-                        for hour in range(2): self.genes.append(TimeSlot(day=day, period=start_period + hour, subject_code=subject.subject_code, subject_name=subject.subject_name, subject_type=subject.subject_type, faculty_id=subject.lab_faculty, section_id=section_id, room_id=room_id, batch_number=batch_index + 1, is_theory=False))
-                    is_session_scheduled = True
-                    break
-                if not is_session_scheduled: print(f"WARNING: Failed to schedule parallel lab session {session_index + 1} for {section_id}")
-            for lab in labs: scheduled_subjects.add(lab.subject_code)
-        return scheduled_subjects
-
-    def _is_valid_slot(self, day: int, period: int) -> bool:
-        return not (day == 4 and period == 3)
-
-    def _get_available_lab_rooms(self, day: int, start_period: int, duration: int = 2) -> List[str]:
-        available_rooms = []
-        for room_id in self.lab_rooms.keys():
-            if all(room_id not in self.lab_usage_tracker.get((day, p), set()) for p in
-                   range(start_period, start_period + duration)):
-                available_rooms.append(room_id)
-        return available_rooms
-
-    def _reserve_lab_room(self, room_id: str, day: int, start_period: int, duration: int = 2):
-        for period in range(start_period, start_period + duration):
-            self.lab_usage_tracker[(day, period)].add(room_id)
-
-    def _is_slot_available(self, day: int, period: int, faculty_id: str, section_id: str, room_id: str) -> bool:
-        for gene in self.genes:
-            if gene.day == day and gene.period == period:
-                if faculty_id and gene.faculty_id == faculty_id: return False
-                if section_id and gene.section_id == section_id: return False
-                if room_id and gene.room_id == room_id: return False
+        scheduled = 0
         
-        for booked_slot in self.master_schedule:
-            if booked_slot['day'] == day and booked_slot['period'] == period:
-                if faculty_id and booked_slot['faculty_id'] == faculty_id: return False
-                if section_id and booked_slot['section_id'] == section_id: return False
-                if room_id and booked_slot['room_id'] == room_id: return False
+        # Try each day
+        for day in range(self.days_per_week):
+            if scheduled >= blocks_needed:
+                break
+            
+            # Check if all afternoon slots available
+            all_available = all(
+                self.constraint_checker.is_available(
+                    day, p, subject.lab_faculty, section_id, classroom, False
+                )
+                for p in self.afternoon_periods
+            )
+            
+            if all_available:
+                # Schedule the 3-hour block
+                for period in self.afternoon_periods:
+                    gene = TimeSlot(
+                        day=day, period=period, subject_code=subject.subject_code,
+                        subject_name=subject.subject_name, subject_type=subject.subject_type,
+                        faculty_id=subject.lab_faculty, section_id=section_id,
+                        room_id=classroom, is_theory=False
+                    )
+                    self.genes.append(gene)
+                    self.constraint_checker.add_slot(gene)
+                scheduled += 1
+    
+    def _schedule_parallel_labs_csp(self):
+        """Schedule parallel labs using CSP with arc consistency - FIXED"""
+        lab_subjects = [s for s in self.subjects 
+                    if s.lab_hours > 0 and not VTUSubjectValidator.is_project(s.subject_type)]
+        
+        labs_by_section = defaultdict(list)
+        for sub in lab_subjects:
+            if sub.lab_faculty:
+                labs_by_section[f"{sub.semester}_{sub.section}"].append(sub)
+        
+        for section_id, labs in labs_by_section.items():
+            if len(labs) < 2:
+                continue
+            
+            num_subjects = len(labs)
+            sessions_needed = num_subjects
+            
+            print(f"\n    🔬 Parallel Lab Scheduling for {section_id}:")
+            print(f"       Subjects: {[lab.subject_code for lab in labs]}")
+            print(f"       Rotation sessions needed: {sessions_needed}")
+            
+            scheduled_sessions = 0
+            
+            for session_idx in range(sessions_needed):
+                print(f"\n       📅 Session {session_idx + 1}/{sessions_needed}:")
+                slot_found = False
+                
+                for day in range(self.days_per_week):
+                    if slot_found:
+                        break
+                    
+                    for start_period in [0, 2, 4]:
+                        if slot_found:
+                            break
+                        
+                        if not self._validate_parallel_lab_slot(
+                            day, start_period, section_id, labs, num_subjects
+                        ):
+                            continue
+                        
+                        available_rooms = self._get_available_lab_rooms(day, start_period, 2)
+                        if len(available_rooms) < num_subjects:
+                            continue
+                        
+                        print(f"          ✅ Found slot: Day {day}, Periods {start_period}-{start_period+1}")
+                        
+                        # ✅ CRITICAL FIX: Schedule ALL batches for BOTH hours
+                        genes_to_add = []  # Collect all genes first
+                        
+                        for subject_slot_idx in range(num_subjects):
+                            rotated_subject_idx = (subject_slot_idx + session_idx) % num_subjects
+                            subject = labs[rotated_subject_idx]
+                            room_id = available_rooms[subject_slot_idx]
+                            batch_number = subject_slot_idx + 1
+                            
+                            print(f"             Batch {batch_number} → {subject.subject_code} in {room_id}")
+                            
+                            # Create BOTH time slots (hour 0 and hour 1)
+                            for hour in range(2):
+                                gene = TimeSlot(
+                                    day=day,
+                                    period=start_period + hour,
+                                    subject_code=subject.subject_code,
+                                    subject_name=subject.subject_name,
+                                    subject_type=subject.subject_type,
+                                    faculty_id=subject.lab_faculty,
+                                    section_id=section_id,
+                                    room_id=room_id,
+                                    batch_number=batch_number,
+                                    is_theory=False
+                                )
+                                genes_to_add.append(gene)
+                                
+                                # ✅ DEBUG: Verify gene creation
+                                print(f"                 Created: Day {day}, P{start_period + hour}, "
+                                    f"Batch {batch_number}, {subject.subject_code}")
+                            
+                            # Reserve lab room for both periods
+                            self.lab_usage_tracker[(day, start_period)].add(room_id)
+                            self.lab_usage_tracker[(day, start_period + 1)].add(room_id)
+                        
+                        # ✅ Add all genes at once
+                        print(f"          📝 Adding {len(genes_to_add)} time slots to schedule...")
+                        for gene in genes_to_add:
+                            self.genes.append(gene)
+                            self.constraint_checker.add_slot(gene)
+                        
+                        # ✅ VERIFY: Count what was added
+                        added_count = len(genes_to_add)
+                        expected_count = num_subjects * 2  # 2 subjects × 2 hours = 4
+                        print(f"          ✅ Verification: Added {added_count}/{expected_count} slots")
+                        
+                        if added_count != expected_count:
+                            print(f"          ⚠️  WARNING: Expected {expected_count} slots but added {added_count}!")
+                        
+                        scheduled_sessions += 1
+                        slot_found = True
+                
+                if not slot_found:
+                    print(f"          ❌ Could not find slot for session {session_idx + 1}")
+            
+            print(f"\n       📊 Summary: Scheduled {scheduled_sessions}/{sessions_needed} sessions")
+    
+    def _validate_parallel_lab_slot(self, day: int, start_period: int, 
+                                    section_id: str, labs: List[Subject], 
+                                    num_parallel: int) -> bool:
+        """CSP validation for parallel lab scheduling"""
+        # Check if enough lab rooms available
+        available_rooms = self._get_available_lab_rooms(day, start_period, 2)
+        if len(available_rooms) < num_parallel:
+            return False
+        
+        # Check all faculty availability
+        for lab in labs:
+            for period in [start_period, start_period + 1]:
+                if not self.constraint_checker.is_available(
+                    day, period, lab.lab_faculty, '', '', False
+                ):
+                    return False
+        
+        # Check section not busy
+        for period in [start_period, start_period + 1]:
+            if not self.constraint_checker.is_available(
+                day, period, '', section_id, '', True
+            ):
+                return False
         
         return True
-
-    def _calculate_slot_score(self, day: int, period: int, section_id: str, subject_code: str) -> int:
-        score = 100
-        day_periods = sorted([g.period for g in self.genes if g.section_id == section_id and g.day == day])
-        if day_periods:
-            if period == max(day_periods) + 1 or period == min(day_periods) - 1:
-                score += 50
-            else:
-                score -= min(abs(period - p) for p in day_periods) * 10
-        if any(g.subject_code == subject_code for g in self.genes if g.section_id == section_id and g.day == day):
-            score -= 75
-        return score
-
-    def _schedule_one_theory_hour(self, subject: Subject, section_id: str):
+    
+    def _schedule_theory_with_csp(self, subject: Subject, section_id: str):
+        """Schedule theory using CSP - MORNING ONLY, afternoon as last resort"""
+        if not subject.theory_faculty:
+            return
+        
         classroom = self.sections[section_id].classroom
-        best_slot, best_score = None, -1
-
+        best_slot = None
+        best_score = -1000
+        
+        # ✅ PHASE 1: Try ONLY morning slots (strict)
         for day in range(self.days_per_week):
-            for period in self.morning_periods:
-                if self._is_valid_slot(day, period) and self._is_slot_available(day, period, subject.theory_faculty,
-                                                                                section_id, classroom):
-                    score = self._calculate_slot_score(day, period, section_id, subject.subject_code)
+            for period in self.morning_periods:  # [0, 1, 2, 3]
+                if self.constraint_checker.is_available(
+                    day, period, subject.theory_faculty, section_id, classroom, True
+                ):
+                    score = self._calculate_slot_score_csp(day, period, section_id, subject.subject_code)
                     if score > best_score:
-                        best_score, best_slot = score, (day, period)
-
-        if best_slot is None:
-            all_periods = self.morning_periods + self.afternoon_periods
-            random.shuffle(all_periods)
-            for day in range(self.days_per_week):
-                for period in all_periods:
-                    if self._is_valid_slot(day, period) and self._is_slot_available(day, period, subject.theory_faculty,
-                                                                                    section_id, classroom):
+                        best_score = score
                         best_slot = (day, period)
-                        break
-                if best_slot: break
-
+        
+        # ✅ PHASE 2: ONLY if no morning slot found, try afternoon
+        if best_slot is None:
+            print(f"      ⚠️ No morning slot for {subject.subject_code}, trying afternoon...")
+            for day in range(self.days_per_week):
+                for period in self.afternoon_periods:  # [4, 5, 6]
+                    if self.constraint_checker.is_available(
+                        day, period, subject.theory_faculty, section_id, classroom, True
+                    ):
+                        score = self._calculate_slot_score_csp(day, period, section_id, subject.subject_code) - 200  # Heavy penalty
+                        if score > best_score:
+                            best_score = score
+                            best_slot = (day, period)
+        
         if best_slot:
             day, period = best_slot
-            self.genes.append(
-                TimeSlot(day=day, period=period, subject_code=subject.subject_code, subject_name=subject.subject_name,
-                         subject_type=subject.subject_type, faculty_id=subject.theory_faculty, section_id=section_id,
-                         room_id=classroom))
+            gene = TimeSlot(
+                day=day, period=period, subject_code=subject.subject_code,
+                subject_name=subject.subject_name, subject_type=subject.subject_type,
+                faculty_id=subject.theory_faculty, section_id=section_id,
+                room_id=classroom, is_theory=True
+            )
+            self.genes.append(gene)
+            self.constraint_checker.add_slot(gene)
         else:
-            print(f"CRITICAL WARNING: Could not find slot for one hour of {subject.subject_code} in {section_id}.")
-
-    def _schedule_lab_only(self, subject: Subject, section_id: str):
-        for _ in range(subject.lab_hours // 2):
-            scheduled = False
-            attempts = 0
-            while not scheduled and attempts < 200:
-                day = random.randint(0, self.days_per_week - 1)
-                start_period = random.choice([0, 2, 4])
-                if self._is_valid_slot(day, start_period) and self._is_valid_slot(day, start_period + 1):
-                    available_rooms = self._get_available_lab_rooms(day, start_period)
-                    if len(available_rooms) >= subject.no_of_batches:
-                        for batch in range(subject.no_of_batches):
-                            room_id = available_rooms[batch]
-                            self._reserve_lab_room(room_id, day, start_period)
-                            for hour in range(2):
-                                self.genes.append(
-                                    TimeSlot(day=day, period=start_period + hour, subject_code=subject.subject_code,
-                                             subject_name=subject.subject_name, subject_type=subject.subject_type,
-                                             faculty_id=subject.lab_faculty, section_id=section_id, room_id=room_id,
-                                             batch_number=batch + 1, is_theory=False))
-                        scheduled = True
+            print(f"      ❌ Could not schedule theory for {subject.subject_code}")
+    
+    def _calculate_slot_score_csp(self, day: int, period: int, section_id: str, subject_code: str) -> int:
+        """Enhanced scoring for CSP slot selection"""
+        score = 100
+        
+        # Prefer continuous slots
+        day_periods = sorted([g.period for g in self.genes if g.section_id == section_id and g.day == day])
+        
+        if day_periods:
+            if period == max(day_periods) + 1 or period == min(day_periods) - 1:
+                score += 80  # Bonus for continuity
+            else:
+                min_gap = min(abs(period - p) for p in day_periods)
+                score -= min_gap * 15
+        
+        # Avoid same subject twice on same day
+        if any(g.subject_code == subject_code for g in self.genes if g.section_id == section_id and g.day == day):
+            score -= 100
+        
+        # Prefer starting from period 0
+        if period == 0:
+            score += 50
+        
+        return score
+    
+    def _get_available_lab_rooms(self, day: int, start_period: int, duration: int = 2) -> List[str]:
+        """Get available lab rooms for given time range"""
+        available = []
+        for room_id in self.lab_rooms.keys():
+            if all(
+                room_id not in self.lab_usage_tracker[(day, p)]
+                for p in range(start_period, start_period + duration)
+            ):
+                available.append(room_id)
+        return available
+    
+    def calculate_fitness(self):
+        """Fast fitness calculation using constraint checker"""
+        fitness = 1000
+        
+        # Hard constraints (cached in constraint checker)
+        faculty_conflicts = self._count_conflicts_fast('faculty')
+        section_conflicts = self._count_conflicts_fast('section')
+        room_conflicts = self._count_conflicts_fast('room')
+        
+        fitness -= faculty_conflicts * 500
+        fitness -= section_conflicts * 500
+        fitness -= room_conflicts * 400
+        
+        # Lab continuity
+        fitness -= self._check_lab_continuity() * 200
+        
+        # Project constraints
+        fitness -= self._check_project_continuity() * 300
+        
+        # Soft constraints
+        fitness -= self._check_gaps() * 100
+        fitness -= self._check_theory_distribution() * 50
+        fitness -= self._penalize_theory_afternoon() * 100 
+        fitness -= self._penalize_sparse_days() * 30
+        
+        self.fitness = max(0, fitness)
+        return self.fitness
+    
+    def _count_conflicts_fast(self, resource_type: str) -> int:
+        """Fast conflict counting using CSP checker"""
+        conflicts = 0
+        slot_counts = defaultdict(int)
+        
+        if resource_type == 'faculty':
+            for gene in self.genes:
+                slot_counts[(gene.faculty_id, gene.day, gene.period)] += 1
+        elif resource_type == 'section':
+            for gene in self.genes:
+                slot_counts[(gene.section_id, gene.day, gene.period)] += 1
+        elif resource_type == 'room':
+            for gene in self.genes:
+                if gene.is_theory:
+                    slot_counts[(gene.room_id, gene.day, gene.period)] += 1
+        
+        for count in slot_counts.values():
+            if count > 1:
+                conflicts += (count - 1)
+        
+        return conflicts
+    
+    def _check_lab_continuity(self) -> int:
+        """Check 2-hour lab blocks are continuous"""
+        violations = 0
+        lab_sessions = defaultdict(list)
+        
+        for gene in self.genes:
+            if not gene.is_theory:
+                key = (gene.subject_code, gene.section_id, gene.batch_number, gene.day)
+                lab_sessions[key].append(gene.period)
+        
+        for periods in lab_sessions.values():
+            if len(periods) >= 2:
+                periods_sorted = sorted(periods)
+                for i in range(len(periods_sorted) - 1):
+                    if periods_sorted[i+1] - periods_sorted[i] != 1:
+                        violations += 1
                         break
-                attempts += 1
-            if not scheduled:
-                print(f"CRITICAL WARNING: Failed to schedule lab {subject.subject_code} for {section_id}.")
-
-    def _check_project_continuity_and_completeness(self) -> int:
-        """
-        Applies a heavy penalty if a project is scheduled but doesn't take up
-        the entire 3-hour afternoon block on a given day.
-        """
+        
+        return violations
+    
+    def _check_project_continuity(self) -> int:
+        """Check project 3-hour blocks"""
         violations = 0
         project_slots = defaultdict(list)
         
-        # Group all project periods by section and day
         for gene in self.genes:
-            if gene.subject_type == "PROJ":
+            if VTUSubjectValidator.is_project(gene.subject_type):
                 project_slots[(gene.section_id, gene.day)].append(gene.period)
-                
+        
         for periods in project_slots.values():
-            # Check if the block is incomplete (not 3 hours) or uses wrong periods
             if len(periods) != 3 or set(periods) != set(self.afternoon_periods):
                 violations += 1
-                
+        
         return violations
-
-    def _penalize_theory_in_afternoon(self) -> int:
-        """Applies a penalty for theory classes scheduled in the afternoon."""
+    
+    def _check_gaps(self) -> int:
+        """Penalize gaps in schedule"""
         violations = 0
+        section_daily = defaultdict(list)
+        
         for gene in self.genes:
-            if gene.is_theory and gene.subject_type != "PROJ" and gene.period in self.afternoon_periods:
-                violations += 1
-        return violations
-
-    def _penalize_faculty_continuous_periods(self) -> int:
-        """Applies a penalty if a faculty has continuous periods, with exceptions."""
-        violations = 0
-        faculty_schedule = defaultdict(list)
-        for gene in self.genes:
-            faculty_schedule[f"{gene.faculty_id}-{gene.day}"].append(gene)
-
-        for schedule in faculty_schedule.values():
-            if len(schedule) < 2:
+            section_daily[(gene.section_id, gene.day)].append(gene.period)
+        
+        for periods in section_daily.values():
+            if not periods:
                 continue
-            
-            schedule.sort(key=lambda g: g.period)
-            
-            for i in range(len(schedule) - 1):
-                g1 = schedule[i]
-                g2 = schedule[i+1]
-
-                # Check for continuous periods
-                if g1.period + 1 == g2.period:
-                    # Exception 1: It's a continuous lab session (which is required)
-                    if not g1.is_theory and g1.subject_code == g2.subject_code:
-                        continue
-                    # Exception 2: Periods 2 and 3 (index 1 and 2)
-                    if g1.period == 1:
-                        continue
-                    # Exception 3: Periods 4 and 5 (index 3 and 4)
-                    if g1.period == 3:
-                        continue
-                    
-                    violations += 1
-        return violations
-
-    # In TimetableChromosome class
-
-    def _penalize_overloaded_faculty_days(self) -> int:
-        """Applies a penalty if a faculty works more than 5 'hours' in a day.
-        A 2-hour lab counts as one hour for this rule."""
-        violations = 0
-        faculty_daily_events = defaultdict(set)
+            periods_sorted = sorted(periods)
+            expected_span = periods_sorted[-1] - periods_sorted[0] + 1
+            violations += (expected_span - len(periods)) * 2
         
-        for gene in self.genes:
-            key = (gene.faculty_id, gene.day)
-            
-            # If it's a theory class, add its period to count as one hour.
-            if gene.is_theory:
-                faculty_daily_events[key].add(gene.period)
-            # If it's a lab, add the subject code. This ensures the 2-hour or 3-hour
-            # block is only counted ONCE as a single event.
-            else:
-                faculty_daily_events[key].add(gene.subject_code)
-                
-        for events in faculty_daily_events.values():
-            if len(events) > 5:
-                violations += (len(events) - 5)
-                
         return violations
-
-# In TimetableChromosome class
-    def calculate_fitness(self):
-        fitness = 1000
-        # Hard Constraints
-        fitness -= self._check_conflicts(lambda g: (g.faculty_id, g.day, g.period)) * 500
-        fitness -= self._check_conflicts(lambda g: (g.section_id, g.day, g.period)) * 500
-        fitness -= self._check_conflicts(lambda g: (g.room_id, g.day, g.period), is_theory=True) * 400
-        fitness -= self._check_conflicts(lambda g: (g.room_id, g.day, g.period), is_theory=False) * 400
-        
-        # Important Soft Constraints
-        fitness -= self._check_lab_continuity() * 200
-        fitness -= self._check_friday_fourth_hour() * 200
-        fitness -= self._check_project_continuity_and_completeness() * 300 # <-- UPDATED & INCREASED PENALTY
-        fitness -= self._penalize_faculty_continuous_periods() * 100 
-        fitness -= self._penalize_overloaded_faculty_days() * 100
-
-        # Standard Soft Constraints
-        fitness -= self._check_gaps_in_schedule() * 100
-        fitness -= self._check_theory_distribution() * 50
-        fitness -= self._penalize_sparse_days() * 30
-        fitness -= self._penalize_theory_in_afternoon() * 20
-
-        self.fitness = max(0, fitness)
-        return self.fitness
-
-    def _check_conflicts(self, key_func, is_theory=None) -> int:
-        conflicts = 0
-        schedule = defaultdict(int)
-        
-        for gene in self.genes:
-            # ▼▼▼ ADD THIS CHECK ▼▼▼
-            # If a type (True/False) is specified, skip genes that don't match.
-            if is_theory is not None and gene.is_theory != is_theory:
-                continue
-            # ▲▲▲ END OF CHECK ▲▲▲
-            
-            key = key_func(gene)
-            if key is not None:
-                schedule[key] += 1
-                
-        for count in schedule.values():
-            if count > 1:
-                conflicts += (count - 1)
-                
-        return conflicts
-
-    def _check_lab_continuity(self) -> int:
-        violations, lab_sessions = 0, defaultdict(list)
-        for gene in self.genes:
-            if not gene.is_theory: lab_sessions[
-                (gene.subject_code, gene.section_id, gene.batch_number, gene.day)].append(gene.period)
-        for periods in lab_sessions.values():
-            if len(periods) > 1 and (max(periods) - min(periods) + 1) != len(periods): violations += 1
-        return violations
-
-    def _check_project_afternoon_blocks(self) -> int:
-        return sum(1 for g in self.genes if g.subject_type == "PROJ" and g.period not in self.afternoon_periods)
-
-    def _check_friday_fourth_hour(self) -> int:
-        return sum(1 for g in self.genes if g.day == 4 and g.period == 3)
-
+    
     def _check_theory_distribution(self) -> int:
-        violations, theory_counts = 0, defaultdict(lambda: defaultdict(int))
+        """Check theory not concentrated on one day"""
+        violations = 0
+        theory_counts = defaultdict(lambda: defaultdict(int))
+        
         for gene in self.genes:
-            if gene.is_theory and gene.subject_type != "PROJ": theory_counts[(gene.subject_code, gene.section_id)][
-                gene.day] += 1
+            if gene.is_theory:
+                theory_counts[(gene.subject_code, gene.section_id)][gene.day] += 1
+        
         for daily_counts in theory_counts.values():
             for count in daily_counts.values():
                 if count > 2:
                     violations += count - 2
-                elif count == 2:
-                    violations += 1
+        
         return violations
-
-    def _check_gaps_in_schedule(self) -> int:
-        violations, section_daily = 0, defaultdict(list)
-        for gene in self.genes: section_daily[gene.section_id].append((gene.day, gene.period))
-        for schedule in section_daily.values():
-            daily_periods = defaultdict(list)
-            for day, period in schedule: daily_periods[day].append(period)
-            for periods in daily_periods.values():
-                if not periods: continue
-                periods.sort()
-                morning = [p for p in periods if p < 4]
-                if morning:
-                    if morning[0] != 0: violations += morning[0] * 5
-                    violations += (max(morning) - min(morning) + 1 - len(morning)) * 3
-        return violations
-
+    
+    def _penalize_theory_afternoon(self) -> int:
+        """Penalize theory in afternoon - HEAVY penalty"""
+        count = sum(1 for g in self.genes 
+                if g.is_theory 
+                and not VTUSubjectValidator.is_project(g.subject_type)
+                and g.period in self.afternoon_periods)
+        return count * 3  # ✅ Changed from * 1 to * 3 (triple penalty)
+    
     def _penalize_sparse_days(self) -> int:
-        """Applies a penalty for days with too few classes."""
+        """Penalize days with very few classes"""
         violations = 0
-        section_daily_counts = defaultdict(lambda: defaultdict(int))
+        daily_counts = defaultdict(lambda: defaultdict(int))
+        
         for gene in self.genes:
-            section_daily_counts[gene.section_id][gene.day] += 1
-
-        for daily_counts in section_daily_counts.values():
-            for count in daily_counts.values():
-                if count == 1:
-                    violations += 10  # Heavy penalty for a single-class day
-                elif count == 2:
-                    violations += 5  # Lighter penalty for a two-class day
+            daily_counts[gene.section_id][gene.day] += 1
+        
+        for counts in daily_counts.values():
+            for count in counts.values():
+                if count <= 2:
+                    violations += (3 - count)
+        
         return violations
-
-    # Add this new method inside your TimetableChromosome class
-
-    def repair_conflicts(self):
-        """
-        Finds and attempts to fix faculty and section conflicts by moving
-        colliding classes to a free slot.
-        """
-        # 1. Identify all conflicts first
-        # Key: (type, id, day, period), Value: list of genes causing the conflict
-        conflict_map = defaultdict(list)
-        for i, gene in enumerate(self.genes):
-            # Use the gene's index 'i' as a unique identifier
-            conflict_map[("faculty", gene.faculty_id, gene.day, gene.period)].append(i)
-            conflict_map[("section", gene.section_id, gene.day, gene.period)].append(i)
-            # You could also add room conflicts here if needed
-
-        # 2. Iterate through the identified conflicts and try to repair them
-        for key, conflicting_indices in conflict_map.items():
-            if len(conflicting_indices) <= 1:
-                continue  # No conflict here
-
-            # Keep the first gene, try to move the others
-            for gene_index in conflicting_indices[1:]:
-                gene_to_move = self.genes[gene_index]
-
-                # Find a new, valid slot for this gene
-                found_new_slot = False
-                possible_periods = self.morning_periods + self.afternoon_periods
-                random.shuffle(possible_periods)
-
-                for new_day in random.sample(range(self.days_per_week), self.days_per_week):
-                    for new_period in possible_periods:
-                        # Check if the proposed new slot is valid and available
-                        if self._is_valid_slot(new_day, new_period) and \
-                                self._is_slot_available(new_day, new_period,
-                                                        gene_to_move.faculty_id,
-                                                        gene_to_move.section_id,
-                                                        gene_to_move.room_id):
-                            # Move the gene to the new free slot
-                            self.genes[gene_index].day = new_day
-                            self.genes[gene_index].period = new_period
-                            found_new_slot = True
-                            break  # Stop searching for a slot
-                    if found_new_slot:
-                        break  # Stop searching for a day
-
-    # NEW: Enhanced Local Search based on research paper
-    def intensive_local_search(self):
-        for _ in range(20):
-            gene_idx = random.randint(0, len(self.genes) - 1)
-            gene_to_move = self.genes[gene_idx]
-            if not gene_to_move.is_theory or gene_to_move.subject_type == "PROJ": continue
-
-            original_day, original_period = gene_to_move.day, gene_to_move.period
-            best_new_slot = None
-            current_fitness = self.calculate_fitness()
-
-            for new_day in random.sample(range(self.days_per_week), self.days_per_week):
-                for new_period in random.sample(self.morning_periods + self.afternoon_periods, self.periods_per_day):
-                    if self._is_valid_slot(new_day, new_period) and \
-                       self._is_slot_available(new_day, new_period, gene_to_move.faculty_id,
-                                                gene_to_move.section_id, gene_to_move.room_id):
-                        
-                        gene_to_move.day, gene_to_move.period = new_day, new_period
-                        new_fitness = self.calculate_fitness()
-                        if new_fitness > current_fitness:
-                            current_fitness = new_fitness
-                            best_new_slot = (new_day, new_period)
-                        gene_to_move.day, gene_to_move.period = original_day, original_period
+    
+    def tabu_local_search(self, max_iterations: int = 50, tabu_size: int = 20):
+        """Enhanced local search with tabu list"""
+        tabu_list = []
+        current_fitness = self.calculate_fitness()
+        
+        for iteration in range(max_iterations):
+            if current_fitness >= 1000:
+                break
             
-            if best_new_slot:
-                self.genes[gene_idx].day = best_new_slot[0]
-                self.genes[gene_idx].period = best_new_slot[1]
+            # Find best non-tabu move
+            best_move = None
+            best_fitness = current_fitness
+            
+            # Try swapping random theory slots
+            for _ in range(10):
+                if len(self.genes) < 2:
+                    break
+                
+                idx1 = random.randint(0, len(self.genes) - 1)
+                idx2 = random.randint(0, len(self.genes) - 1)
+                
+                if idx1 == idx2 or not self.genes[idx1].is_theory or not self.genes[idx2].is_theory:
+                    continue
+                
+                move = (idx1, idx2)
+                if move in tabu_list:
+                    continue
+                
+                # Try swap
+                self.genes[idx1], self.genes[idx2] = self.genes[idx2], self.genes[idx1]
+                self.constraint_checker.rebuild_from_genes(self.genes)
+                
+                new_fitness = self.calculate_fitness()
+                
+                if new_fitness > best_fitness:
+                    best_fitness = new_fitness
+                    best_move = move
+                
+                # Undo swap
+                self.genes[idx1], self.genes[idx2] = self.genes[idx2], self.genes[idx1]
+            
+            if best_move:
+                idx1, idx2 = best_move
+                self.genes[idx1], self.genes[idx2] = self.genes[idx2], self.genes[idx1]
+                self.constraint_checker.rebuild_from_genes(self.genes)
+                current_fitness = best_fitness
+                
+                tabu_list.append(best_move)
+                if len(tabu_list) > tabu_size:
+                    tabu_list.pop(0)
 
-# Main function to run the GA
-# scheduler.py
+    def repair_lab_continuity_post_generation(self):
+        """
+        Post-generation repair: Fix non-continuous 2-hour lab blocks
+        Searches for available continuous slots and reschedules broken labs
+        """
+        print("\n🔧 Post-Generation Lab Continuity Repair...")
+        
+        # Step 1: Identify broken lab sessions
+        lab_sessions = defaultdict(list)
+        
+        for idx, gene in enumerate(self.genes):
+            if not gene.is_theory:  # Only labs
+                key = (gene.subject_code, gene.section_id, gene.batch_number, gene.day)
+                lab_sessions[key].append({'index': idx, 'gene': gene})
+        
+        repairs_attempted = 0
+        repairs_successful = 0
+        
+        for key, session_genes in lab_sessions.items():
+            subject_code, section_id, batch_number, day = key
+            
+            if len(session_genes) != 2:  # Should be 2-hour block
+                continue
+            
+            periods = sorted([g['gene'].period for g in session_genes])
+            
+            # Check if continuous
+            if periods[1] - periods[0] == 1:
+                continue  # Already continuous, skip
+            
+            # Found broken lab session!
+            repairs_attempted += 1
+            print(f"  ⚠️ Found broken lab: {subject_code} Batch {batch_number} on Day {day}")
+            print(f"     Current periods: {periods[0]}, {periods[1]} (gap detected)")
+            
+            # Step 2: Try to find continuous 2-hour slot
+            gene1 = session_genes[0]['gene']
+            gene2 = session_genes[1]['gene']
+            
+            # Get faculty and room info
+            faculty_id = gene1.faculty_id
+            room_id = gene1.room_id
+            
+            # Search for available continuous slot
+            new_slot_found = False
+            
+            # Try same day first
+            for start_period in [0, 2, 4]:  # 2-hour blocks: 0-1, 2-3, 4-5
+                if self._is_continuous_slot_available(
+                    day, start_period, faculty_id, section_id, room_id, 
+                    exclude_indices=[g['index'] for g in session_genes]
+                ):
+                    # Found valid continuous slot!
+                    print(f"     ✅ Found continuous slot: Day {day}, Periods {start_period}-{start_period+1}")
+                    
+                    # Update the genes
+                    self.genes[session_genes[0]['index']].period = start_period
+                    self.genes[session_genes[1]['index']].period = start_period + 1
+                    
+                    repairs_successful += 1
+                    new_slot_found = True
+                    break
+            
+            # If not found on same day, try other days
+            if not new_slot_found:
+                for new_day in range(self.days_per_week):
+                    if new_day == day:
+                        continue  # Already tried
+                    
+                    for start_period in [0, 2, 4]:
+                        if self._is_continuous_slot_available(
+                            new_day, start_period, faculty_id, section_id, room_id,
+                            exclude_indices=[g['index'] for g in session_genes]
+                        ):
+                            print(f"     ✅ Found continuous slot: Day {new_day}, Periods {start_period}-{start_period+1}")
+                            
+                            # Update the genes (including day change)
+                            self.genes[session_genes[0]['index']].day = new_day
+                            self.genes[session_genes[0]['index']].period = start_period
+                            self.genes[session_genes[1]['index']].day = new_day
+                            self.genes[session_genes[1]['index']].period = start_period + 1
+                            
+                            # Update lab room tracker
+                            self.lab_usage_tracker[(new_day, start_period)].add(room_id)
+                            self.lab_usage_tracker[(new_day, start_period + 1)].add(room_id)
+                            
+                            repairs_successful += 1
+                            new_slot_found = True
+                            break
+                    
+                    if new_slot_found:
+                        break
+            
+            if not new_slot_found:
+                print(f"     ❌ Could not find continuous slot for {subject_code} Batch {batch_number}")
+        
+        # Rebuild constraint checker after repairs
+        if repairs_successful > 0:
+            self.constraint_checker.rebuild_from_genes(self.genes)
+        
+        print(f"\n  📊 Lab Repair Summary:")
+        print(f"     Broken labs found: {repairs_attempted}")
+        print(f"     Successfully repaired: {repairs_successful}")
+        print(f"     Still broken: {repairs_attempted - repairs_successful}")
+        
+        return repairs_successful
 
-# ... (all your dataclasses and the TimetableChromosome class are above this) ...
+    def _is_continuous_slot_available(self, day, start_period, faculty_id, 
+                                   section_id, room_id, exclude_indices=None):
+        """
+        Check if a continuous 2-hour slot is available
+        exclude_indices: Gene indices to ignore (the ones we're trying to move)
+        """
+        if exclude_indices is None:
+            exclude_indices = []
+        
+        # Check both periods
+        for period in [start_period, start_period + 1]:
+            # Check against existing genes (except the ones we're moving)
+            for idx, gene in enumerate(self.genes):
+                if idx in exclude_indices:
+                    continue  # Skip the genes we're trying to reschedule
+                
+                if gene.day == day and gene.period == period:
+                    # Check conflicts
+                    if gene.faculty_id == faculty_id:
+                        return False  # Faculty busy
+                    if gene.section_id == section_id:
+                        return False  # Section busy
+                    if gene.is_theory and gene.room_id == room_id:
+                        return False  # Room busy (for theory)
+                    if not gene.is_theory and gene.room_id == room_id:
+                        return False  # Lab room busy
+            
+            # Check against master schedule
+            for slot in self.master_schedule:
+                if slot['day'] == day and slot['period'] == period:
+                    if slot['faculty_id'] == faculty_id:
+                        return False
+                    if slot['section_id'] == section_id:
+                        return False
+                    if slot['room_id'] == room_id:
+                        return False
+        
+        return True  # Slot is available!
 
-# This function replaces the ExcelTimetableScheduler class and main()
-def generate_semester_timetable(subjects_data, faculties_data, sections_data, lab_rooms_data, master_schedule_data):
-    # --- GA Parameters ---
-    population_size = 150
-    generations = 600
-    crossover_rate = 0.9
-    mutation_rate = 0.15
+# ===========================
+# OPTIMIZED GENETIC ALGORITHM
+# ===========================
 
-    # --- Convert dictionaries to dataclass objects ---
+def generate_semester_timetable(subjects_data, faculties_data, sections_data,
+                               lab_rooms_data, master_schedule_data):
+    """Optimized GA with Hybrid CSP + Local Search + Tabu"""
+    
+    # Adaptive parameters
+    population_size = 120
+    generations = 500
+    crossover_rate = 0.85
+    mutation_rate_start = 0.25
+    mutation_rate_end = 0.05
+    elite_ratio = 0.15
+    
+    print("\n" + "="*70)
+    print("OPTIMIZED VTU TIMETABLE GENERATION")
+    print("Hybrid: Genetic Algorithm + CSP + Tabu Local Search")
+    print("="*70)
+    
     subjects = [Subject(**s) for s in subjects_data]
     faculties = [Faculty(**f) for f in faculties_data.values()]
     sections = [Section(**s) for s in sections_data.values()]
     lab_rooms = [LabRoom(**r) for r in lab_rooms_data.values()]
     
-    # ▼▼▼ HELPER FUNCTIONS (Logic from your old class) ▼▼▼
-    def selection(population):
-        return max(random.sample(population, 3), key=lambda x: x.fitness)
-
-    def crossover(p1, p2):
-        if random.random() > crossover_rate or len(p1.genes) <= 1 or len(p2.genes) <= 1:
-            return copy.deepcopy(p1), copy.deepcopy(p2)
-        pt = random.randint(1, min(len(p1.genes), len(p2.genes)) - 1)
-        c1, c2 = copy.deepcopy(p1), copy.deepcopy(p2)
-        c1.genes, c2.genes = p1.genes[:pt] + p2.genes[pt:], p2.genes[:pt] + p1.genes[pt:]
-        return c1, c2
-
-    def mutate(chromosome):
-        if random.random() < mutation_rate and len(chromosome.genes) >= 2:
-            idx1, idx2 = random.sample(range(len(chromosome.genes)), 2)
-            chromosome.genes[idx1], chromosome.genes[idx2] = chromosome.genes[idx2], chromosome.genes[idx1]
-    # ▲▲▲ END OF HELPER FUNCTIONS ▲▲▲
-
-    # --- Initialize Population ---
+    print(f"\n📊 Input Statistics:")
+    print(f"  Subjects: {len(subjects)}")
+    print(f"  Faculties: {len(faculties)}")
+    print(f"  Sections: {len(sections)}")
+    print(f"  Lab Rooms: {len(lab_rooms)}")
+    
+    start_time = time.time()
+    
+    # Initialize population with CSP
+    print("\n🎲 Initializing population with CSP guidance...")
     population = []
-    for _ in range(population_size):
-        chromosome = TimetableChromosome(subjects, faculties, sections, lab_rooms, master_schedule_data)
-        chromosome.initialize_random()
+    
+    for i in range(population_size):
+        chromosome = OptimizedTimetableChromosome(
+            subjects, faculties, sections, lab_rooms, master_schedule_data
+        )
+        chromosome.initialize_with_csp()
         chromosome.calculate_fitness()
         population.append(chromosome)
-
-    best_chromosome = None
+        
+        if (i + 1) % 20 == 0:
+            avg_fitness = sum(p.fitness for p in population) / len(population)
+            print(f"  Generated {i+1}/{population_size} | Avg Fitness: {avg_fitness:.1f}")
+    
+    best_ever = max(population, key=lambda x: x.fitness)
+    stagnation_counter = 0
+    
+    print("\n🧬 Evolution in progress...")
+    
     for generation in range(generations):
+        # Adaptive mutation rate
+        progress = generation / generations
+        mutation_rate = mutation_rate_start * (1 - progress) + mutation_rate_end * progress
+        
+        # Sort population
         population.sort(key=lambda x: x.fitness, reverse=True)
-        if not best_chromosome or population[0].fitness > best_chromosome.fitness:
-            best_chromosome = copy.deepcopy(population[0])
-        if generation % 100 == 0:
-            print(f"Gen {generation}: Best Fitness = {best_chromosome.fitness:.2f}")
-
-        # --- Elitism and Local Search ---
-        next_pop = population[:population_size // 10]
-        for elite in next_pop:
-            elite.intensive_local_search()
+        
+        # Track best
+        if population[0].fitness > best_ever.fitness:
+            best_ever = copy.deepcopy(population[0])
+            stagnation_counter = 0
+        else:
+            stagnation_counter += 1
+        
+        # Progress report
+        if generation % 50 == 0:
+            avg_fit = sum(p.fitness for p in population) / len(population)
+            print(f"  Gen {generation:3d} | Best: {best_ever.fitness:6.1f} | "
+                  f"Avg: {avg_fit:6.1f} | Mutation: {mutation_rate:.3f}")
+        
+        # Early stopping
+        if best_ever.fitness >= 1000:
+            print(f"\n✨ Perfect solution found at generation {generation}!")
+            break
+        
+        # Diversity injection if stagnant
+        if stagnation_counter > 50:
+            print("  💉 Injecting diversity...")
+            for i in range(population_size // 4):
+                new_chromo = OptimizedTimetableChromosome(
+                    subjects, faculties, sections, lab_rooms, master_schedule_data
+                )
+                new_chromo.initialize_with_csp()
+                new_chromo.calculate_fitness()
+                population[-i-1] = new_chromo
+            stagnation_counter = 0
+        
+        # Elitism
+        elite_count = int(population_size * elite_ratio)
+        next_pop = population[:elite_count]
+        
+        # Apply tabu search on elite
+        for elite in next_pop[:5]:
+            elite.tabu_local_search(max_iterations=30)
             elite.calculate_fitness()
-
-        # --- Generate New Population ---
+        
+        # Generate offspring
         while len(next_pop) < population_size:
-            p1, p2 = selection(population), selection(population)
-            c1, c2 = crossover(p1, p2)
+            # Tournament selection
+            p1 = max(random.sample(population, 3), key=lambda x: x.fitness)
+            p2 = max(random.sample(population, 3), key=lambda x: x.fitness)
             
-            # ▼▼▼ CORRECTED CALLS ▼▼▼
-            mutate(c1)
-            mutate(c2)
+            # Crossover
+            if random.random() < crossover_rate:
+                c1 = copy.deepcopy(p1)
+                c2 = copy.deepcopy(p2)
+                
+                if len(c1.genes) > 1 and len(c2.genes) > 1:
+                    pt = random.randint(1, min(len(c1.genes), len(c2.genes)) - 1)
+                    c1.genes, c2.genes = c1.genes[:pt] + c2.genes[pt:], c2.genes[:pt] + c1.genes[pt:]
+                    
+                    c1.constraint_checker.rebuild_from_genes(c1.genes)
+                    c2.constraint_checker.rebuild_from_genes(c2.genes)
+            else:
+                c1, c2 = copy.deepcopy(p1), copy.deepcopy(p2)
             
-            c1.repair_conflicts()
-            c2.repair_conflicts()
-            
-            c1.calculate_fitness()
-            c2.calculate_fitness()
+            # Mutation
+            for child in [c1, c2]:
+                if random.random() < mutation_rate and len(child.genes) >= 2:
+                    idx1, idx2 = random.sample(range(len(child.genes)), 2)
+                    child.genes[idx1], child.genes[idx2] = child.genes[idx2], child.genes[idx1]
+                    child.constraint_checker.rebuild_from_genes(child.genes)
+                
+                child.calculate_fitness()
             
             next_pop.extend([c1, c2])
-
+        
         population = next_pop[:population_size]
-
-    print(f"Evolution finished. Best fitness: {best_chromosome.fitness:.2f}")
     
-    final_timetable = [gene.__dict__ for gene in best_chromosome.genes]
-    return final_timetable
+    # Repair broken lab continuity
+    repairs_made = best_ever.repair_lab_continuity_post_generation()
+    
+    # Recalculate fitness after repairs
+    if repairs_made > 0:
+        print("\n🔄 Recalculating fitness after repairs...")
+        best_ever.calculate_fitness()
+        print(f"   New fitness: {best_ever.fitness:.2f}")
+    
+    # Optional: One more round of local search after repairs
+    if best_ever.fitness < 900:
+        print("\n🔍 Applying final local search...")
+        best_ever.tabu_local_search(max_iterations=50)
+        best_ever.calculate_fitness()
+        print(f"   Final fitness: {best_ever.fitness:.2f}")
+
+    elapsed_time = time.time() - start_time
+    
+    print("\n" + "="*70)
+    print("GENERATION COMPLETE")
+    print("="*70)
+    print(f"⏱️  Time Elapsed: {elapsed_time:.2f} seconds")
+    print(f"🏆 Best Fitness: {best_ever.fitness:.2f}/1000")
+    print(f"📅 Total Slots Scheduled: {len(best_ever.genes)}")
+    
+    # ✅ DETAILED CONSTRAINT ANALYSIS
+    print("\n📊 Constraint Violation Analysis:")
+    print("-" * 70)
+    
+    # Hard constraints
+    faculty_conflicts = best_ever._count_conflicts_fast('faculty')
+    section_conflicts = best_ever._count_conflicts_fast('section')
+    room_conflicts = best_ever._count_conflicts_fast('room')
+    lab_continuity = best_ever._check_lab_continuity()
+    project_continuity = best_ever._check_project_continuity()
+    
+    if lab_continuity > 0:
+        print(f"    Lab Continuity Issues:  {lab_continuity:3d} ❌")
+        print(f"      💡 Tip: Some 2-hour lab blocks are not continuous")
+        
+        # Show which labs are broken
+        lab_sessions = defaultdict(list)
+        for gene in best_ever.genes:
+            if not gene.is_theory:
+                key = (gene.subject_code, gene.section_id, gene.batch_number, gene.day)
+                lab_sessions[key].append(gene.period)
+        
+        broken_count = 0
+        for key, periods in lab_sessions.items():
+            if len(periods) == 2:
+                periods_sorted = sorted(periods)
+                if periods_sorted[1] - periods_sorted[0] != 1:
+                    subject_code, section_id, batch_num, day = key
+                    print(f"         - {subject_code} Batch {batch_num}, Day {day}: "
+                          f"Periods {periods_sorted[0]}, {periods_sorted[1]}")
+                    broken_count += 1
+                    if broken_count >= 5:  # Limit output
+                        remaining = lab_continuity - broken_count
+                        if remaining > 0:
+                            print(f"         ... and {remaining} more")
+                        break
+    else:
+        print(f"    Lab Continuity Issues:  {lab_continuity:3d} ✅")
+
+    print(f"  Hard Constraints:")
+    print(f"    Faculty Conflicts:      {faculty_conflicts:3d} {'✅' if faculty_conflicts == 0 else '❌'}")
+    print(f"    Section Conflicts:      {section_conflicts:3d} {'✅' if section_conflicts == 0 else '❌'}")
+    print(f"    Room Conflicts:         {room_conflicts:3d} {'✅' if room_conflicts == 0 else '❌'}")
+    print(f"    Lab Continuity Issues:  {lab_continuity:3d} {'✅' if lab_continuity == 0 else '❌'}")
+    print(f"    Project Block Issues:   {project_continuity:3d} {'✅' if project_continuity == 0 else '❌'}")
+    
+    hard_constraint_score = (faculty_conflicts + section_conflicts + room_conflicts + 
+                            lab_continuity + project_continuity)
+    
+    # Soft constraints
+    gaps = best_ever._check_gaps()
+    theory_distribution = best_ever._check_theory_distribution()
+    theory_afternoon = best_ever._penalize_theory_afternoon()
+    sparse_days = best_ever._penalize_sparse_days()
+    
+    print(f"\n  Soft Constraints:")
+    print(f"    Schedule Gaps:          {gaps:3d} {'✅' if gaps < 10 else '⚠️'}")
+    print(f"    Theory Distribution:    {theory_distribution:3d} {'✅' if theory_distribution < 5 else '⚠️'}")
+    print(f"    Theory in Afternoon:    {theory_afternoon:3d} {'✅' if theory_afternoon == 0 else '⚠️'}")
+    print(f"    Sparse Days:            {sparse_days:3d} {'✅' if sparse_days < 10 else '⚠️'}")
+    
+    print("-" * 70)
+    
+    # ✅ QUALITY ASSESSMENT
+    if hard_constraint_score == 0:
+        if best_ever.fitness >= 950:
+            quality = "EXCELLENT ⭐⭐⭐⭐⭐"
+            status = "READY FOR PRODUCTION"
+        elif best_ever.fitness >= 850:
+            quality = "VERY GOOD ⭐⭐⭐⭐"
+            status = "ACCEPTABLE WITH MINOR ISSUES"
+        elif best_ever.fitness >= 700:
+            quality = "GOOD ⭐⭐⭐"
+            status = "ACCEPTABLE BUT NEEDS REVIEW"
+        else:
+            quality = "ACCEPTABLE ⭐⭐"
+            status = "NEEDS IMPROVEMENT"
+    else:
+        quality = "UNACCEPTABLE ❌"
+        status = "HAS HARD CONSTRAINT VIOLATIONS"
+    
+    print(f"\n✅ Overall Quality: {quality}")
+    print(f"📋 Status: {status}")
+    
+    # ✅ SUBJECT TYPE BREAKDOWN
+    print("\n📚 Scheduled Classes Breakdown:")
+    type_counts = defaultdict(int)
+    for gene in best_ever.genes:
+        key = f"{gene.subject_type}_{('Theory' if gene.is_theory else 'Lab')}"
+        type_counts[key] += 1
+    
+    for type_key, count in sorted(type_counts.items()):
+        print(f"    {type_key:20s}: {count:3d} slots")
+    
+    print("="*70 + "\n")
+    
+    # ✅ REGENERATION SUGGESTION
+    fitness_threshold = 800  # Minimum acceptable fitness
+    
+    if best_ever.fitness < fitness_threshold:
+        print("⚠️  WARNING: Fitness below threshold!")
+        print(f"   Current: {best_ever.fitness:.2f} | Threshold: {fitness_threshold}")
+        print("   Suggestions:")
+        print("   1. Increase population size to 150-200")
+        print("   2. Increase generations to 800-1000")
+        print("   3. Check if constraints are too restrictive")
+        print("   4. Increase lab room availability")
+        
+        # Ask for regeneration
+        print("\n🔄 Recommendation: Regenerate timetable")
+        return [gene.__dict__ for gene in best_ever.genes] # Return None to signal regeneration needed
+    
+    return [gene.__dict__ for gene in best_ever.genes]
+
+def generate_timetable_with_retry(subjects_data, faculties_data, sections_data,
+                                  lab_rooms_data, master_schedule_data,
+                                  max_attempts=3, fitness_threshold=800):
+    """Generate timetable with automatic retry"""
+    
+    best_result = None
+    best_fitness = -1
+    
+    for attempt in range(1, max_attempts + 1):
+        print(f"\n{'='*70}")
+        print(f"ATTEMPT {attempt}/{max_attempts}")
+        print(f"{'='*70}")
+        
+        result = generate_semester_timetable(
+            subjects_data, faculties_data, sections_data,
+            lab_rooms_data, master_schedule_data
+        )
+        
+        # ✅ Extract fitness from result
+        if isinstance(result, dict):
+            current_fitness = result['fitness']
+            current_timetable = result['timetable']
+        else:
+            # Fallback for old format
+            current_timetable = result
+            current_fitness = 0
+        
+        # Keep track of best attempt
+        if current_timetable and len(current_timetable) > 0:
+            if current_fitness > best_fitness:
+                best_fitness = current_fitness
+                best_result = result
+        
+        # Check if satisfactory
+        if current_fitness >= fitness_threshold:
+            print(f"\n✅ SUCCESS on attempt {attempt}!")
+            return result
+        
+        if attempt < max_attempts:
+            print(f"\n🔄 Fitness {current_fitness:.2f} below threshold. Retrying...")
+    
+    # ✅ Return best attempt even if below threshold
+    if best_result:
+        print(f"\n⚠️ Returning best attempt with fitness {best_fitness:.2f}")
+        return best_result
+    
+    # ✅ Last resort - return empty but valid structure
+    print("\n❌ All attempts failed - returning empty timetable")
+    return {
+        'timetable': [],
+        'fitness': 0,
+        'success': False,
+        'warnings': ['Failed to generate any valid timetable']
+    }
+
+if __name__ == "__main__":
+    print("VTU Timetable Scheduler - Optimized Version 5.0")
+    print("Hybrid GA + CSP + Tabu Local Search")

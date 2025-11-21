@@ -1,8 +1,6 @@
 "use client";
-import { useState, useRef, useEffect, Fragment } from 'react';
+import { useState, useRef, useEffect, Fragment } from "react";
 
-// --- INTERFACES ---
-// For the subject input form
 interface SubjectInput {
   subject_code: string;
   subject_name: string;
@@ -13,325 +11,988 @@ interface SubjectInput {
   lab_faculty: string;
   no_of_batches: number;
 }
-// For the data returned from the backend
+
 interface TimeSlot {
   day: number;
   period: number;
   subject_code: string;
   subject_name: string;
-  subject_type: string; // <-- Add this field
+  subject_type: string;
   faculty_id: string;
+  section_id: string;
   room_id: string;
   batch_number?: number;
   is_theory: boolean;
 }
-// For success/error messages
+
 interface Message {
-  type: 'success' | 'error';
+  type: "success" | "error" | "info";
   text: string;
 }
 
-// --- TIMETABLE GRID COMPONENT ---
-// This component is responsible for displaying the timetable
-const TimetableGrid = ({ timetableData }: { timetableData: TimeSlot[] }) => {
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const periods = ['9:00-9:55', '9:55-10:50', '11:05-12:00', '12:00-12:55', '2:00-2:55', '2:55-3:50', '3:50-4:45'];
-    
-    const scheduleMap = new Map<string, TimeSlot[]>();
-    timetableData.forEach(slot => {
-        const key = `${slot.day}-${slot.period}`;
-        if (!scheduleMap.has(key)) {
-            scheduleMap.set(key, []);
-        }
-        scheduleMap.get(key)?.push(slot);
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const PERIODS = [
+  "9:00-9:55",
+  "9:55-10:50",
+  "11:05-12:00",
+  "12:00-12:55",
+  "2:00-2:55",
+  "2:55-3:50",
+  "3:50-4:45",
+];
+
+
+function buildScheduleMap(data: TimeSlot[]) {
+  const map = new Map<string, TimeSlot[]>();
+  
+  for (const slot of data) {
+    const key = `${slot.day}-${slot.period}`;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(slot);
+  }
+  
+  // Sort slots within each cell for consistent display
+  for (const [key, arr] of map.entries()) {
+    arr.sort((a, b) => {
+      // Order: Theory first (0), Labs (1), Projects (2)
+      const order = (t: TimeSlot) => {
+        if (t.subject_type === "PROJ") return 2;
+        return t.is_theory ? 0 : 1;
+      };
+      const oa = order(a), ob = order(b);
+      if (oa !== ob) return oa - ob;
+      
+      // Within same type, sort by batch number
+      const ba = a.batch_number ?? 0;
+      const bb = b.batch_number ?? 0;
+      if (ba !== bb) return ba - bb;
+      
+      // Finally by subject code
+      return a.subject_code.localeCompare(b.subject_code);
     });
+    map.set(key, arr);
+  }
+  
+  return map;
+}
 
-    return (
-        <div className="mt-12 bg-white p-8 rounded-lg shadow-md">
-            <h2 className="text-2xl font-bold text-gray-800 mb-6">Timetable Display</h2>
-            <div className="overflow-x-auto">
-                <table className="min-w-full border-collapse border border-gray-300">
-                    <thead>
-                        {/* ... Table head is unchanged ... */}
-                    </thead>
-                    <tbody>
-                        {periods.map((time, periodIndex) => (
-                            <Fragment key={time}>
-                                <tr>
-                                    <td className="border border-gray-300 p-2 font-semibold bg-gray-100 text-center">{time}</td>
-                                    {days.map((day, dayIndex) => {
-                                        const key = `${dayIndex}-${periodIndex}`;
-                                        const slots = scheduleMap.get(key);
-                                        
-                                        // --- START OF NEW & IMPROVED RENDER LOGIC ---
-                                        if (slots) {
-                                            const isProject = slots[0].subject_type === 'PROJ';
-                                            const isLab = !slots[0].is_theory;
-                                            const isParallelLab = isLab && slots.length > 1;
 
-                                            let bgColor = 'bg-gray-50';
-                                            if (isProject) bgColor = 'bg-yellow-50';
-                                            else if (isLab) bgColor = 'bg-blue-50';
-                                            else bgColor = 'bg-green-50';
+function isContinuation(
+  scheduleMap: Map<string, TimeSlot[]>,
+  dayIndex: number,
+  periodIndex: number
+) {
+  if (periodIndex === 0) return { cont: false, items: [] as TimeSlot[] };
+  
+  const key = `${dayIndex}-${periodIndex}`;
+  const slots = scheduleMap.get(key);
+  if (!slots) return { cont: false, items: [] as TimeSlot[] };
+  
+  const prevKey = `${dayIndex}-${periodIndex - 1}`;
+  const prevSlots = scheduleMap.get(prevKey) ?? [];
+  
+  const contItems: TimeSlot[] = [];
+  
+  for (const curr of slots) {
+    const match = prevSlots.find((p) => {
+      // Project continuity
+      if (curr.subject_type === "PROJ" && p.subject_type === "PROJ") {
+        return curr.subject_code === p.subject_code;
+      }
+      
+      // Lab continuity (same subject, same batch)
+      if (!curr.is_theory && !p.is_theory) {
+        return (
+          curr.subject_code === p.subject_code &&
+          (curr.batch_number ?? -1) === (p.batch_number ?? -1)
+        );
+      }
+      
+      return false;
+    });
+    
+    if (match) contItems.push(curr);
+  }
+  
+  return { cont: contItems.length > 0, items: contItems };
+}
 
-                                            // Check if this is the second hour of a lab/project block
-                                            const prevKey = `${dayIndex}-${periodIndex - 1}`;
-                                            const prevSlots = scheduleMap.get(prevKey);
-                                            if (prevSlots && 
-                                                ((isLab && !prevSlots[0].is_theory && prevSlots[0].subject_code === slots[0].subject_code) ||
-                                                (isProject && prevSlots[0].subject_type === 'PROJ'))) {
-                                                return (
-                                                    <td key={key} className={`border border-gray-300 p-2 text-center text-xs h-24 align-middle ${bgColor}`}>
-                                                        <p className="font-semibold text-gray-500 italic">(Continued)</p>
-                                                    </td>
-                                                );
-                                            }
 
-                                            return (
-                                                <td key={key} className={`border border-gray-300 p-2 text-center text-xs h-24 align-top ${bgColor}`}>
-                                                    {/* Display for Parallel Labs */}
-                                                    {isParallelLab && (
-                                                        <div className="font-bold">
-                                                            {slots.map(slot => 
-                                                                `${slot.subject_code} Lab (B${slot.batch_number}) ${slot.faculty_id}`
-                                                            ).join(' / ')}
-                                                        </div>
-                                                    )}
+const TimetableGrid = ({ timetableData }: { timetableData: TimeSlot[] }) => {
+  const scheduleMap = buildScheduleMap(timetableData);
 
-                                                    {/* Display for Single Labs, Projects, or Theory */}
-                                                    {!isParallelLab && slots.map((slot, i) => (
-                                                        <div key={i} className="mb-1">
-                                                            <p className="font-bold">
-                                                                {isProject ? `${slot.subject_code} - PROJECT`
-                                                                    : isLab ? `${slot.subject_code} LAB`
-                                                                    : slot.subject_code
-                                                                }
-                                                            </p>
-                                                            <p>{slot.subject_name}</p>
-                                                            <p className="text-gray-600">{slot.faculty_id}</p>
-                                                            <p className="text-gray-500 italic">
-                                                                {isLab ? `B${slot.batch_number} (${slot.room_id})` : `(${slot.room_id})`}
-                                                            </p>
-                                                        </div>
-                                                    ))}
-                                                </td>
-                                            );
-                                        }
+  
+  const getCellBackground = (slots: TimeSlot[]) => {
+    if (slots.some((s) => s.subject_type === "PROJ")) return "bg-amber-50";
+    if (slots.every((s) => !s.is_theory)) return "bg-blue-50";
+    return "bg-green-50";
+  };
 
-                                        // Return a FREE slot if no 'slots' exist
-                                        return <td key={key} className="border border-gray-300 p-2 text-center text-xs h-24 align-middle bg-gray-50">FREE</td>;
-                                        // --- END OF NEW RENDER LOGIC ---
-                                    })}
-                                </tr>
-                                {periodIndex === 1 && <tr className="bg-orange-100 font-bold text-orange-800"><td colSpan={7} className="text-center p-1">BREAK</td></tr>}
-                                {periodIndex === 3 && <tr className="bg-orange-100 font-bold text-orange-800"><td colSpan={7} className="text-center p-1">LUNCH</td></tr>}
-                            </Fragment>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+  
+  const isParallelLabs = (slots: TimeSlot[]) => {
+    return slots.every((s) => !s.is_theory) && slots.length > 1;
+  };
+
+  return (
+    <div className="mt-12 bg-white p-8 rounded-lg shadow-md">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold text-gray-800">Generated Timetable</h2>
+        <div className="flex gap-4 text-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-green-50 border border-green-200 rounded"></div>
+            <span>Theory</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-blue-50 border border-blue-200 rounded"></div>
+            <span>Lab</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-amber-50 border border-amber-200 rounded"></div>
+            <span>Project</span>
+          </div>
         </div>
-    );
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="min-w-full border-collapse border border-gray-300">
+          <thead>
+            <tr>
+              <th className="border border-gray-300 p-3 text-center bg-gray-100 font-bold text-gray-700">
+                Time
+              </th>
+              {DAYS.map((day) => (
+                <th
+                  key={day}
+                  className="border border-gray-300 p-3 text-center bg-gray-100 font-bold text-gray-700"
+                >
+                  {day}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {PERIODS.map((time, periodIndex) => (
+              <Fragment key={time}>
+                <tr>
+                  <td className="border border-gray-300 p-3 font-semibold bg-gray-50 text-center text-sm">
+                    <div className="flex flex-col">
+                      <span className="font-bold">P{periodIndex}</span>
+                      <span className="text-xs text-gray-600">{time}</span>
+                    </div>
+                  </td>
+                  
+                  {DAYS.map((_, dayIndex) => {
+                    const key = `${dayIndex}-${periodIndex}`;
+                    const slots = scheduleMap.get(key);
+
+                    // Empty cell
+                    if (!slots || slots.length === 0) {
+                      return (
+                        <td
+                          key={key}
+                          className="border border-gray-300 p-3 text-center text-sm h-28 align-middle bg-gray-50"
+                        >
+                          <span className="text-gray-400 font-medium">FREE</span>
+                        </td>
+                      );
+                    }
+
+                    const bgColor = getCellBackground(slots);
+                    const contInfo = isContinuation(scheduleMap, dayIndex, periodIndex);
+
+                    // Continuation cell (show simplified info)
+                    if (contInfo.cont) {
+                      const isProject = contInfo.items.some((s) => s.subject_type === "PROJ");
+                      return (
+                        <td
+                          key={key}
+                          className={`border border-gray-300 p-3 text-center text-xs h-28 align-middle ${bgColor}`}
+                        >
+                          <div className="flex flex-col items-center justify-center h-full">
+                            <p className="font-semibold text-gray-500 italic text-sm">
+                              (Continued)
+                            </p>
+                            {isProject ? (
+                              <p className="text-xs text-gray-600 mt-1">Project Block</p>
+                            ) : (
+                              <div className="mt-1 text-xs text-gray-600">
+                                {contInfo.items
+                                  .filter((s) => !s.is_theory)
+                                  .map((s) => (
+                                    <div key={`${s.subject_code}-${s.batch_number}`}>
+                                      B{s.batch_number} • {s.subject_code}
+                                    </div>
+                                  ))}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      );
+                    }
+
+                    // Parallel labs cell
+                    if (isParallelLabs(slots)) {
+                      return (
+                        <td
+                          key={key}
+                          className={`border border-gray-300 p-3 text-xs h-28 align-top ${bgColor}`}
+                        >
+                          <div className="space-y-2">
+                            <div className="text-center">
+                              <p className="font-bold text-blue-700 text-sm mb-1">
+                                ⚡ Parallel Labs
+                              </p>
+                            </div>
+                            <div className="space-y-1.5">
+                              {slots.map((slot, idx) => (
+                                <div
+                                  key={idx}
+                                  className="bg-white rounded p-1.5 border border-blue-200"
+                                >
+                                  <div className="font-bold text-blue-800">
+                                    Batch {slot.batch_number}
+                                  </div>
+                                  <div className="text-xs font-semibold text-gray-800">
+                                    {slot.subject_code}
+                                  </div>
+                                  <div className="text-xs text-gray-600">
+                                    {slot.faculty_id}
+                                  </div>
+                                  <div className="text-xs text-gray-500 italic">
+                                    {slot.room_id}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </td>
+                      );
+                    }
+
+                    // Single slot cell (Theory, Lab, or Project)
+                    const slot = slots[0];
+                    const isProject = slot.subject_type === "PROJ";
+                    const isLab = !slot.is_theory && slot.subject_type !== "PROJ";
+
+                    return (
+                      <td
+                        key={key}
+                        className={`border border-gray-300 p-3 text-xs h-28 align-top ${bgColor}`}
+                      >
+                        <div className="flex flex-col h-full justify-between">
+                          {/* Header */}
+                          <div>
+                            <div className="font-bold text-gray-800 text-sm mb-1">
+                              {isProject && "📊 "}
+                              {isLab && "🔬 "}
+                              {slot.subject_code}
+                              {isProject && " - PROJECT"}
+                              {isLab && " - LAB"}
+                            </div>
+                            <div className="text-xs text-gray-700 font-medium mb-1">
+                              {slot.subject_name}
+                            </div>
+                          </div>
+
+                          {/* Details */}
+                          <div className="space-y-1">
+                            <div className="text-xs text-gray-600 font-medium">
+                              👤 {slot.faculty_id}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {isLab && `🔹 Batch ${slot.batch_number} • `}
+                              📍 {slot.room_id}
+                            </div>
+                            {isProject && (
+                              <div className="text-xs text-amber-700 font-semibold italic mt-1">
+                                3-hour block
+                              </div>
+                            )}
+                            {isLab && (
+                              <div className="text-xs text-blue-700 font-semibold italic mt-1">
+                                2-hour session
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+
+                {/* Break after Period 1 */}
+                {periodIndex === 1 && (
+                  <tr className="bg-orange-100 font-bold text-orange-800">
+                    <td colSpan={7} className="text-center p-2 text-sm">
+                      ☕ SHORT BREAK (10 mins)
+                    </td>
+                  </tr>
+                )}
+
+                {/* Lunch after Period 3 */}
+                {periodIndex === 3 && (
+                  <tr className="bg-orange-100 font-bold text-orange-800">
+                    <td colSpan={7} className="text-center p-2 text-sm">
+                      🍽️ LUNCH BREAK (1 hour)
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Statistics */}
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="text-sm font-medium text-green-700">Theory Classes</div>
+          <div className="text-2xl font-bold text-green-800">
+            {timetableData.filter((s) => s.is_theory && s.subject_type !== "PROJ").length}
+          </div>
+        </div>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="text-sm font-medium text-blue-700">Lab Sessions</div>
+          <div className="text-2xl font-bold text-blue-800">
+            {timetableData.filter((s) => !s.is_theory && s.subject_type !== "PROJ").length}
+          </div>
+        </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <div className="text-sm font-medium text-amber-700">Project Hours</div>
+          <div className="text-2xl font-bold text-amber-800">
+            {timetableData.filter((s) => s.subject_type === "PROJ").length}
+          </div>
+        </div>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <div className="text-sm font-medium text-gray-700">Total Periods</div>
+          <div className="text-2xl font-bold text-gray-800">
+            {new Set(timetableData.map((s) => `${s.day}-${s.period}`)).size}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 
-// --- MAIN PAGE COMPONENT ---
 export default function TimetablePage() {
-  // --- STATE MANAGEMENT ---
-  // For the generator form
-  const [semester, setSemester] = useState('');
-  const [section, setSection] = useState('');
-  const [classroom, setClassroom] = useState('');
+  const [semester, setSemester] = useState("");
+  const [section, setSection] = useState("");
+  const [classroom, setClassroom] = useState("");
   const [subjects, setSubjects] = useState<SubjectInput[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  
-  // For viewing existing timetables
   const [availableTimetables, setAvailableTimetables] = useState<string[]>([]);
-  const [selectedTimetable, setSelectedTimetable] = useState<string>('');
+  const [selectedTimetable, setSelectedTimetable] = useState<string>("");
   const [isLoadingView, setIsLoadingView] = useState(false);
-  
-  // For displaying the timetable grid and messages
   const [timetableToDisplay, setTimetableToDisplay] = useState<TimeSlot[]>([]);
   const [message, setMessage] = useState<Message | null>(null);
+  const [generationStats, setGenerationStats] = useState<{
+    fitness?: number;
+    generation_time?: number;
+  } | null>(null);
   const timetableRef = useRef<HTMLDivElement>(null);
 
-  // --- DATA FETCHING ---
-  // Fetch available timetables when the page loads
+  // Fetch available timetables on mount
   useEffect(() => {
     const fetchAvailable = async () => {
-        try {
-            const response = await fetch('http://localhost:8080/api/timetables/available');
-            const data = await response.json();
-            if (response.ok && Array.isArray(data)) {
-                setAvailableTimetables(data);
-                if (data.length > 0) {
-                    setSelectedTimetable(data[0]);
-                }
-            }
-        } catch (error) { console.error("Failed to fetch available timetables:", error); }
+      try {
+        const response = await fetch("http://localhost:8080/api/timetables/available");
+        const data = await response.json();
+        if (response.ok && Array.isArray(data)) {
+          setAvailableTimetables(data);
+          if (data.length > 0) setSelectedTimetable(data[0]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch available timetables:", error);
+      }
     };
     fetchAvailable();
   }, []);
 
-  // --- EVENT HANDLERS ---
-  const addSubjectRow = () => setSubjects([...subjects, { subject_code: '', subject_name: '', subject_type: '', theory_hours: 0, lab_hours: 0, theory_faculty: '', lab_faculty: '', no_of_batches: 0 }]);
-  
-  const handleSubjectChange = (index: number, field: keyof SubjectInput, value: string | number) => {
-    const updatedSubjects = subjects.map((subject, i) => {
-        if (i !== index) return subject;
-        const updatedSubject = { ...subject };
-        const numericFields: (keyof SubjectInput)[] = ['theory_hours', 'lab_hours', 'no_of_batches'];
-        if (numericFields.includes(field)) {
-            (updatedSubject as any)[field] = parseInt(value as string, 10) || 0;
-        } else {
-            (updatedSubject as any)[field] = value;
-        }
-        return updatedSubject;
-    });
-    setSubjects(updatedSubjects);
+  const addSubjectRow = () =>
+    setSubjects((s) => [
+      ...s,
+      {
+        subject_code: "",
+        subject_name: "",
+        subject_type: "",
+        theory_hours: 0,
+        lab_hours: 0,
+        theory_faculty: "",
+        lab_faculty: "",
+        no_of_batches: 0,
+      },
+    ]);
+
+  const removeSubjectRow = (index: number) => {
+    setSubjects((s) => s.filter((_, i) => i !== index));
   };
-  
+
+  const handleSubjectChange = (
+    index: number,
+    field: keyof SubjectInput,
+    value: string | number
+  ) => {
+    const updated = subjects.map((subject, i) => {
+      if (i !== index) return subject;
+      const u: any = { ...subject };
+      const numericFields: (keyof SubjectInput)[] = [
+        "theory_hours",
+        "lab_hours",
+        "no_of_batches",
+      ];
+      if (numericFields.includes(field)) u[field] = parseInt(value as string, 10) || 0;
+      else u[field] = value;
+      return u as SubjectInput;
+    });
+    setSubjects(updated);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsGenerating(true);
     setMessage(null);
     setTimetableToDisplay([]);
+    setGenerationStats(null);
+
+    // Validate subjects
+    if (subjects.length === 0) {
+      setMessage({ type: "error", text: "Please add at least one subject." });
+      setIsGenerating(false);
+      return;
+    }
 
     const payload = { semester, section, classroom, subjects };
-    
+
     try {
-        const response = await fetch('http://localhost:8080/api/timetable/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+      const response = await fetch("http://localhost:8080/api/timetable/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json();
+
+      if (!response.ok) throw new Error(result.message || "An unknown error occurred.");
+
+      setMessage({
+        type: "success",
+        text: result.message || "Timetable generated successfully!",
+      });
+
+      if (result.timetable) {
+        setTimetableToDisplay(result.timetable as TimeSlot[]);
+        setGenerationStats({
+          fitness: result.fitness,
+          generation_time: result.generation_time,
         });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.message || 'An unknown error occurred.');
-        
-        setMessage({ type: 'success', text: result.message });
-        if (result.timetable) {
-            setTimetableToDisplay(result.timetable);
-        }
+      }
+
+      // Scroll to timetable
+      setTimeout(() => {
+        timetableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
     } catch (error: any) {
-        setMessage({ type: 'error', text: error.message });
+      setMessage({ type: "error", text: error.message });
     } finally {
-        setIsGenerating(false);
+      setIsGenerating(false);
     }
   };
 
   const handleLoadTimetable = async () => {
-      if (!selectedTimetable) return;
-      setIsLoadingView(true);
-      setMessage(null);
-      setTimetableToDisplay([]);
-      
-      try {
-          const response = await fetch(`http://localhost:8080/api/timetable/${selectedTimetable}`);
-          const data = await response.json();
-          if (!response.ok) throw new Error(data.message || 'Failed to load timetable.');
-          
-          setTimetableToDisplay(data);
-          setMessage({type: 'success', text: `Successfully loaded timetable for ${selectedTimetable.replace('_', ' ')}.`});
-          
-          setTimeout(() => {
-            timetableRef.current?.scrollIntoView({ behavior: 'smooth' });
-          }, 100);
-      } catch (error: any) {
-          setMessage({ type: 'error', text: error.message });
-      } finally {
-          setIsLoadingView(false);
-      }
+    if (!selectedTimetable) return;
+    setIsLoadingView(true);
+    setMessage(null);
+    setTimetableToDisplay([]);
+    setGenerationStats(null);
+
+    try {
+      const response = await fetch(`http://localhost:8080/api/timetable/${selectedTimetable}`);
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.message || "Failed to load timetable.");
+
+      setTimetableToDisplay(data as TimeSlot[]);
+      setMessage({
+        type: "success",
+        text: `Successfully loaded timetable for ${selectedTimetable.replace("_", " ")}.`,
+      });
+
+      setTimeout(() => {
+        timetableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    } catch (error: any) {
+      setMessage({ type: "error", text: error.message });
+    } finally {
+      setIsLoadingView(false);
+    }
   };
 
-  // --- JSX / RENDER ---
+  
+  const handleExport = async (format: 'pdf' | 'word' | 'excel') => {
+    if (timetableToDisplay.length === 0) {
+      setMessage({ type: 'error', text: 'Please generate or load a timetable first' });
+      return;
+    }
+    
+    // Determine section ID from current state or selectedTimetable
+    const sectionId = selectedTimetable || `${semester}_${section}`;
+    
+    if (!sectionId || sectionId === '_') {
+      setMessage({ type: 'error', text: 'Unable to determine section ID for export' });
+      return;
+    }
+    
+    try {
+      setMessage({ type: 'info', text: `Generating ${format.toUpperCase()} file...` });
+      
+      const response = await fetch(
+        `http://localhost:8080/api/timetable/${sectionId}/export/${format}`
+      );
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Export failed');
+      }
+      
+      // Get the blob
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      
+      // Set filename with correct extension
+      const extension = format === 'word' ? 'docx' : format === 'excel' ? 'xlsx' : 'pdf';
+      a.download = `Timetable_${sectionId}.${extension}`;
+      
+      // Trigger download
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      setMessage({ 
+        type: 'success', 
+        text: `${format.toUpperCase()} exported successfully!` 
+      });
+    } catch (error: any) {
+      console.error('Export error:', error);
+      setMessage({ 
+        type: 'error', 
+        text: `Failed to export: ${error.message}` 
+      });
+    }
+  };
   return (
-    <main className="bg-gray-50 min-h-screen">
+    <main className="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="max-w-7xl mx-auto">
-            <h1 className="text-3xl font-bold text-gray-800 tracking-tight">Uni-Smart Dashboard</h1>
-            
-            {/* Section to view existing timetables */}
-            <div className="mt-10 bg-white p-8 rounded-lg shadow-md">
-                <h2 className="text-2xl font-bold text-gray-800 mb-4">View Existing Timetable</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-                    <div className="md:col-span-2">
-                        <label htmlFor="select-timetable" className="block text-sm font-medium text-gray-700">Select a Section</label>
-                        <select id="select-timetable" value={selectedTimetable} onChange={(e) => setSelectedTimetable(e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                            {availableTimetables.length === 0 && <option>No saved timetables found</option>}
-                            {availableTimetables.map(id => <option key={id} value={id}>{id.replace('_', ' ')}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <button type="button" onClick={handleLoadTimetable} disabled={isLoadingView || availableTimetables.length === 0} className="w-full bg-blue-600 text-white px-6 py-2 rounded-md font-semibold hover:bg-blue-700 disabled:bg-gray-400">
-                            {isLoadingView ? 'Loading...' : 'Load Timetable'}
-                        </button>
-                    </div>
-                </div>
+          {/* Header */}
+          <div className="text-center mb-10">
+            <h1 className="text-4xl font-bold text-gray-800 tracking-tight mb-2">
+              🎓 Uni-Smart Timetable Generator
+            </h1>
+            <p className="text-gray-600">
+              AI-Powered Intelligent Timetable Generation System
+            </p>
+          </div>
+
+          {/* View Existing Timetable */}
+          <div className="mt-10 bg-white p-8 rounded-lg shadow-md border border-gray-200">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <span>📋</span> View Existing Timetable
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+              <div className="md:col-span-2">
+                <label htmlFor="select-timetable" className="block text-sm font-medium text-gray-700 mb-2">
+                  Select a Section
+                </label>
+                <select
+                  id="select-timetable"
+                  value={selectedTimetable}
+                  onChange={(e) => setSelectedTimetable(e.target.value)}
+                  className="block w-full px-4 py-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                  {availableTimetables.length === 0 && (
+                    <option>No saved timetables found</option>
+                  )}
+                  {availableTimetables.map((id) => (
+                    <option key={id} value={id}>
+                      {id.replace("_", " ")}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <button
+                  type="button"
+                  onClick={handleLoadTimetable}
+                  disabled={isLoadingView || availableTimetables.length === 0}
+                  className="w-full bg-blue-600 text-white px-6 py-3 rounded-md font-semibold hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
+                >
+                  {isLoadingView ? "Loading..." : "Load Timetable"}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Generate New Timetable Form */}
+          <form
+            onSubmit={handleSubmit}
+            className="mt-10 bg-white p-8 rounded-lg shadow-md border border-gray-200 space-y-8"
+          >
+            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+              <span>⚡</span> Generate New Timetable
+            </h2>
+
+            {/* Section Details */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <label htmlFor="semester" className="block text-sm font-medium text-gray-700 mb-2">
+                  Semester *
+                </label>
+                <input
+                  type="text"
+                  id="semester"
+                  value={semester}
+                  onChange={(e) => setSemester(e.target.value)}
+                  required
+                  placeholder="e.g., 3"
+                  className="block w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="section" className="block text-sm font-medium text-gray-700 mb-2">
+                  Section *
+                </label>
+                <input
+                  type="text"
+                  id="section"
+                  value={section}
+                  onChange={(e) => setSection(e.target.value)}
+                  required
+                  placeholder="e.g., A"
+                  className="block w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="classroom" className="block text-sm font-medium text-gray-700 mb-2">
+                  Designated Classroom *
+                </label>
+                <input
+                  type="text"
+                  id="classroom"
+                  value={classroom}
+                  onChange={(e) => setClassroom(e.target.value)}
+                  required
+                  placeholder="e.g., Room 301"
+                  className="block w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
             </div>
 
-            {/* Section to generate a new timetable */}
-            <form onSubmit={handleSubmit} className="mt-10 bg-white p-8 rounded-lg shadow-md space-y-8">
-                <h2 className="text-2xl font-bold text-gray-800">Generate New Timetable</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div>
-                        <label htmlFor="semester" className="block text-sm font-medium text-gray-700">Semester</label>
-                        <input type="text" id="semester" value={semester} onChange={e => setSemester(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"/>
-                    </div>
-                    <div>
-                        <label htmlFor="section" className="block text-sm font-medium text-gray-700">Section</label>
-                        <input type="text" id="section" value={section} onChange={e => setSection(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"/>
-                    </div>
-                    <div>
-                        <label htmlFor="classroom" className="block text-sm font-medium text-gray-700">Designated Classroom</label>
-                        <input type="text" id="classroom" value={classroom} onChange={e => setClassroom(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"/>
-                    </div>
-                </div>
+            {/* Subjects Table */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Subject Details</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 border border-gray-200">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      {[
+                        "Code",
+                        "Name",
+                        "Type",
+                        "Theory Hrs",
+                        "Lab Hrs",
+                        "Theory Faculty",
+                        "Lab Faculty",
+                        "Batches",
+                        "Action",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider"
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {subjects.map((sub, index) => (
+                      <tr key={index} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <input
+                            type="text"
+                            value={sub.subject_code}
+                            onChange={(e) =>
+                              handleSubjectChange(index, "subject_code", e.target.value)
+                            }
+                            placeholder="CS101"
+                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                          />
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <input
+                            type="text"
+                            value={sub.subject_name}
+                            onChange={(e) =>
+                              handleSubjectChange(index, "subject_name", e.target.value)
+                            }
+                            placeholder="Data Structures"
+                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                          />
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <select
+                            value={sub.subject_type}
+                            onChange={(e) =>
+                              handleSubjectChange(index, "subject_type", e.target.value)
+                            }
+                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                            title="VTU Subject Categories"
+                          >
+                            <option value="">Select Type</option>
+                            <option value="IPCC">IPCC - Theory + Lab</option>
+                            <option value="PCC">PCC - Theory Only</option>
+                            <option value="PCCL">PCCL - Lab Only</option>
+                            <option value="PEC">PEC - Elective Theory</option>
+                            <option value="OEC">OEC - Open Elective</option>
+                            <option value="HSMC">HSMC - Humanities</option>
+                            <option value="MP">MP - Project</option>
+                            <option value="INT">INT - Internship</option>
+                          </select>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <input
+                            type="number"
+                            value={sub.theory_hours}
+                            onChange={(e) =>
+                              handleSubjectChange(index, "theory_hours", e.target.value)
+                            }
+                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                            min={0}
+                          />
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <input
+                            type="number"
+                            value={sub.lab_hours}
+                            onChange={(e) =>
+                              handleSubjectChange(index, "lab_hours", e.target.value)
+                            }
+                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                            min={0}
+                          />
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <input
+                            type="text"
+                            value={sub.theory_faculty}
+                            onChange={(e) =>
+                              handleSubjectChange(index, "theory_faculty", e.target.value)
+                            }
+                            placeholder="F001"
+                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                          />
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <input
+                            type="text"
+                            value={sub.lab_faculty}
+                            onChange={(e) =>
+                              handleSubjectChange(index, "lab_faculty", e.target.value)
+                            }
+                            placeholder="F002"
+                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                          />
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <input
+                            type="number"
+                            value={sub.no_of_batches}
+                            onChange={(e) =>
+                              handleSubjectChange(index, "no_of_batches", e.target.value)
+                            }
+                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                            min={0}
+                          />
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => removeSubjectRow(index)}
+                            className="text-red-600 hover:text-red-800 font-medium"
+                          >
+                            ❌
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-100">
-                            <tr>
-                                {['Code', 'Name', 'Type', 'Theory Hrs', 'Lab Hrs', 'Theory Faculty', 'Lab Faculty', 'Batches'].map(h => 
-                                    <th key={h} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{h}</th>
-                                )}
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {subjects.map((sub, index) => (
-                                <tr key={index} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 whitespace-nowrap"><input type="text" value={sub.subject_code} onChange={e => handleSubjectChange(index, 'subject_code', e.target.value)} className="w-full p-1 border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"/></td>
-                                    <td className="px-6 py-4 whitespace-nowrap"><input type="text" value={sub.subject_name} onChange={e => handleSubjectChange(index, 'subject_name', e.target.value)} className="w-full p-1 border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"/></td>
-                                    <td className="px-6 py-4 whitespace-nowrap"><input type="text" value={sub.subject_type} onChange={e => handleSubjectChange(index, 'subject_type', e.target.value)} className="w-full p-1 border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"/></td>
-                                    <td className="px-6 py-4 whitespace-nowrap"><input type="number" value={sub.theory_hours} onChange={e => handleSubjectChange(index, 'theory_hours', e.target.value)} className="w-full p-1 border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" min={0}/></td>
-                                    <td className="px-6 py-4 whitespace-nowrap"><input type="number" value={sub.lab_hours} onChange={e => handleSubjectChange(index, 'lab_hours', e.target.value)} className="w-full p-1 border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" min={0}/></td>
-                                    <td className="px-6 py-4 whitespace-nowrap"><input type="text" value={sub.theory_faculty} onChange={e => handleSubjectChange(index, 'theory_faculty', e.target.value)} className="w-full p-1 border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"/></td>
-                                    <td className="px-6 py-4 whitespace-nowrap"><input type="text" value={sub.lab_faculty} onChange={e => handleSubjectChange(index, 'lab_faculty', e.target.value)} className="w-full p-1 border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"/></td>
-                                    <td className="px-6 py-4 whitespace-nowrap"><input type="number" value={sub.no_of_batches} onChange={e => handleSubjectChange(index, 'no_of_batches', e.target.value)} className="w-full p-1 border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" min={0}/></td>
-                                </tr>
-                         ))}
-                        </tbody>
-                    </table>
-                </div>
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row justify-between items-center pt-5 border-t border-gray-200 gap-4">
+              <button
+                type="button"
+                onClick={addSubjectRow}
+                className="w-full sm:w-auto bg-indigo-100 text-indigo-700 px-6 py-3 rounded-md font-semibold hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                ➕ Add Subject Row
+              </button>
+              <button
+                type="submit"
+                disabled={isGenerating}
+                className="w-full sm:w-auto bg-green-600 text-white px-8 py-3 rounded-md text-lg font-semibold hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400 transition-colors"
+              >
+                {isGenerating ? "⏳ Generating..." : "✨ Generate Timetable"}
+              </button>
+            </div>
+          </form>
 
-                <div className="flex flex-col sm:flex-row justify-between items-center pt-5 border-t border-gray-200">
-                    <button type="button" onClick={addSubjectRow} className="mb-4 sm:mb-0 w-full sm:w-auto bg-indigo-100 text-indigo-700 px-4 py-2 rounded-md font-semibold hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                        + Add Subject Row
-                    </button>
-                    <button type="submit" disabled={isGenerating} className="w-full sm:w-auto bg-green-600 text-white px-6 py-3 rounded-md text-lg font-semibold hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400">
-                        {isGenerating ? 'Generating...' : 'Generate Timetable'}
-                    </button>
+          {/* Display messages */}
+          {message && (
+            <div
+              className={`mt-6 p-4 rounded-md text-sm text-center font-medium ${
+                message.type === "success"
+                  ? "bg-green-100 text-green-800 border border-green-200"
+                  : message.type === "error"
+                  ? "bg-red-100 text-red-800 border border-red-200"
+                  : "bg-blue-100 text-blue-800 border border-blue-200"
+              }`}
+            >
+              {message.text}
+            </div>
+          )}
+
+          {/* Generation Statistics */}
+          {generationStats && (
+            <div className="mt-6 bg-white p-6 rounded-lg shadow-md border border-gray-200">
+              <h3 className="text-lg font-bold text-gray-800 mb-4">Generation Statistics</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="text-sm font-medium text-blue-700">Fitness Score</div>
+                  <div className="text-3xl font-bold text-blue-800">
+                    {generationStats.fitness?.toFixed(2) || "N/A"}
+                  </div>
+                  <div className="text-xs text-blue-600 mt-1">
+                    {(generationStats.fitness || 0) >= 900
+                      ? "Excellent Quality ⭐⭐⭐"
+                      : (generationStats.fitness || 0) >= 700
+                      ? "Good Quality ⭐⭐"
+                      : "Acceptable Quality ⭐"}
+                  </div>
                 </div>
-            </form>
-            
-            {/* Display messages */}
-            {message && <div className={`mt-6 p-4 rounded-md text-sm text-center ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{message.text}</div>}
-            
-            {/* Display the timetable grid */}
-            {timetableToDisplay.length > 0 && (
-                <div ref={timetableRef}>
-                    <TimetableGrid timetableData={timetableToDisplay} />
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="text-sm font-medium text-green-700">Generation Time</div>
+                  <div className="text-3xl font-bold text-green-800">
+                    {generationStats.generation_time?.toFixed(2) || "N/A"}s
+                  </div>
+                  <div className="text-xs text-green-600 mt-1">Time taken to generate</div>
                 </div>
-            )}
+              </div>
+            </div>
+          )}
+
+          {/* Display the timetable grid */}
+          {timetableToDisplay.length > 0 && (
+            <div ref={timetableRef}>
+              <TimetableGrid timetableData={timetableToDisplay} />
+            </div>
+          )}
+          {timetableToDisplay.length > 0 && (
+  <div className="mt-8 bg-white p-6 rounded-lg shadow-md border border-gray-200">
+    <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+      <span>📥</span> Export Timetable
+    </h3>
+    <p className="text-sm text-gray-600 mb-4">
+      Download the generated timetable in your preferred format
+    </p>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <button
+        onClick={() => handleExport('pdf')}
+        className="flex items-center justify-center gap-3 bg-red-600 text-white px-6 py-4 rounded-lg font-semibold hover:bg-red-700 transition-all transform hover:scale-105 shadow-md"
+      >
+        <svg 
+          className="w-6 h-6" 
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+        >
+          <path 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            strokeWidth={2} 
+            d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" 
+          />
+        </svg>
+        <div className="text-left">
+          <div className="font-bold">Export as PDF</div>
+          <div className="text-xs opacity-90">Print-ready format</div>
+        </div>
+      </button>
+
+      <button
+        onClick={() => handleExport('word')}
+        className="flex items-center justify-center gap-3 bg-blue-600 text-white px-6 py-4 rounded-lg font-semibold hover:bg-blue-700 transition-all transform hover:scale-105 shadow-md"
+      >
+        <svg 
+          className="w-6 h-6" 
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+        >
+          <path 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            strokeWidth={2} 
+            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" 
+          />
+        </svg>
+        <div className="text-left">
+          <div className="font-bold">Export as Word</div>
+          <div className="text-xs opacity-90">Editable document</div>
+        </div>
+      </button>
+
+      <button
+        onClick={() => handleExport('excel')}
+        className="flex items-center justify-center gap-3 bg-green-600 text-white px-6 py-4 rounded-lg font-semibold hover:bg-green-700 transition-all transform hover:scale-105 shadow-md"
+      >
+        <svg 
+          className="w-6 h-6" 
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+        >
+          <path 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            strokeWidth={2} 
+            d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" 
+          />
+        </svg>
+        <div className="text-left">
+          <div className="font-bold">Export as Excel</div>
+          <div className="text-xs opacity-90">Spreadsheet format</div>
+        </div>
+      </button>
+    </div>
+
+    {/* Quick tips */}
+    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+      <p className="text-xs text-blue-800">
+        <strong>💡 Tip:</strong> PDF is best for printing, Word for editing, and Excel for data analysis.
+      </p>
+    </div>
+  </div>
+)}
         </div>
       </div>
     </main>
