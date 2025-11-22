@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { AcademicCapIcon, CalendarIcon, ChartBarIcon, BellIcon, BuildingOffice2Icon } from '@heroicons/react/24/solid';
+import { AcademicCapIcon, CalendarIcon, ChartBarIcon, BellIcon, BuildingOffice2Icon, ClipboardDocumentCheckIcon } from '@heroicons/react/24/solid';
 
 const HomePage = () => {
   return (
@@ -43,6 +43,12 @@ const HomePage = () => {
               </span>
             </li>
             <li className="flex items-start">
+              <ClipboardDocumentCheckIcon className="h-6 w-6 text-purple-500 mr-3 mt-1" />
+              <span>
+                <span className="font-semibold">Exam Seating:</span> View your exam hall and seat allocation for upcoming examinations.
+              </span>
+            </li>
+            <li className="flex items-start">
               <BellIcon className="h-6 w-6 text-yellow-500 mr-3 mt-1" />
               <span>
                 <span className="font-semibold">Notifications:</span> Get instant alerts on any academic updates, from new class materials to meeting changes.
@@ -71,6 +77,12 @@ const HomePage = () => {
               <AcademicCapIcon className="h-6 w-6 text-teal-500 mr-3 mt-1" />
               <span>
                 <span className="font-semibold">Teaching Plan:</span> Have your course plans and materials organized in one place.
+              </span>
+            </li>
+            <li className="flex items-start">
+              <ClipboardDocumentCheckIcon className="h-6 w-6 text-blue-500 mr-3 mt-1" />
+              <span>
+                <span className="font-semibold">Exam Management:</span> Generate and manage exam seating arrangements efficiently.
               </span>
             </li>
             <li className="flex items-start">

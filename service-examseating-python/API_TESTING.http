@@ -1,0 +1,158 @@
+# Exam Seating API Testing
+# Use this file with REST Client (VS Code Extension) or similar tools
+
+@baseUrl = http://localhost:5001
+@gatewayUrl = http://localhost:8080
+
+### ============== EXAM ROOMS ==============
+
+### Get all exam rooms
+GET {{baseUrl}}/rooms
+
+### Create a new exam room
+POST {{baseUrl}}/rooms
+Content-Type: application/json
+
+{
+  "id": "CR-105",
+  "num_rows": 6,
+  "num_cols": 8
+}
+
+### Update an exam room
+PUT {{baseUrl}}/rooms/CR-105
+Content-Type: application/json
+
+{
+  "num_rows": 7,
+  "num_cols": 9
+}
+
+### Delete an exam room
+DELETE {{baseUrl}}/rooms/CR-105
+
+
+### ============== EXAMS ==============
+
+### Get all exams
+GET {{baseUrl}}/exams
+
+### Create a new exam
+POST {{baseUrl}}/exams
+Content-Type: application/json
+
+{
+  "subject_code": "CS301",
+  "exam_date": "2025-06-05",
+  "exam_session": "morning"
+}
+
+### Delete an exam (replace {exam_id} with actual ID)
+DELETE {{baseUrl}}/exams/1
+
+
+### ============== STUDENT REGISTRATIONS ==============
+
+### Register a single student for an exam
+POST {{baseUrl}}/registrations
+Content-Type: application/json
+
+{
+  "student_usn": "1MS21CS001",
+  "exam_id": 1
+}
+
+### Register multiple students for an exam (Batch)
+POST {{baseUrl}}/registrations/batch
+Content-Type: application/json
+
+{
+  "exam_id": 1,
+  "student_usns": [
+    "1MS21CS001",
+    "1MS21CS002",
+    "1MS21CS003",
+    "1MS21CS004",
+    "1MS21CS005"
+  ]
+}
+
+### Get all students registered for a specific exam
+GET {{baseUrl}}/exams/1/registrations
+
+
+### ============== SEATING PLAN GENERATION ==============
+
+### Generate seating plan (via Gateway - recommended)
+POST {{gatewayUrl}}/api/exams/generate-seating
+Content-Type: application/json
+
+{
+  "exam_date": "2025-06-01",
+  "exam_session": "morning"
+}
+
+### Generate seating plan (Direct - internal use)
+POST {{baseUrl}}/generate_seating
+Content-Type: application/json
+
+{
+  "exam_date": "2025-06-01",
+  "exam_session": "morning"
+}
+
+### Get saved seating plan
+GET {{baseUrl}}/seating-plan?exam_date=2025-06-01&exam_session=morning
+
+
+### ============== COMPLETE WORKFLOW EXAMPLE ==============
+
+### Step 1: Create exam rooms (if not exists)
+POST {{baseUrl}}/rooms
+Content-Type: application/json
+
+{
+  "id": "HALL-B",
+  "num_rows": 8,
+  "num_cols": 10
+}
+
+### Step 2: Create an exam
+POST {{baseUrl}}/exams
+Content-Type: application/json
+
+{
+  "subject_code": "CS401",
+  "exam_date": "2025-06-15",
+  "exam_session": "afternoon"
+}
+
+### Step 3: Register students (use exam_id from step 2 response)
+POST {{baseUrl}}/registrations/batch
+Content-Type: application/json
+
+{
+  "exam_id": 2,
+  "student_usns": [
+    "1MS21CS001",
+    "1MS21CS002",
+    "1MS21CS003",
+    "1MS21CS004",
+    "1MS21CS005",
+    "1MS21CS006",
+    "1MS21CS007",
+    "1MS21CS008"
+  ]
+}
+
+### Step 4: Generate seating plan
+POST {{gatewayUrl}}/api/exams/generate-seating
+Content-Type: application/json
+
+{
+  "exam_date": "2025-06-15",
+  "exam_session": "afternoon"
+}
+
+### Step 5: Retrieve the seating plan
+GET {{baseUrl}}/seating-plan?exam_date=2025-06-15&exam_session=afternoon

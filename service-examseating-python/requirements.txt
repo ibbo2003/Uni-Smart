@@ -1,4 +1,5 @@
 Flask
+Flask-CORS
 mysql-connector-python
 python-dotenv
 pandas
