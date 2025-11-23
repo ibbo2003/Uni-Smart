@@ -593,9 +593,50 @@ export default function TimetablePage() {
             <h1 className="text-4xl font-bold text-gray-800 tracking-tight mb-2">
               🎓 Uni-Smart Timetable Generator
             </h1>
-            <p className="text-gray-600">
+            <p className="text-gray-600 mb-2">
               AI-Powered Intelligent Timetable Generation System
             </p>
+            <div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 rounded-full px-4 py-1">
+              <span className="text-green-700 font-semibold text-sm">✅ v5.1</span>
+              <span className="text-green-600 text-xs">Enhanced VTU 2024 Compliance</span>
+            </div>
+          </div>
+
+          {/* Feature Highlights */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+            <div className="bg-white border border-blue-200 rounded-lg p-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="text-2xl">🔬</div>
+                <div>
+                  <h3 className="font-semibold text-gray-800 text-sm">Smart Lab Scheduling</h3>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Automatically uses afternoon slots when no project is scheduled that day
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white border border-green-200 rounded-lg p-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="text-2xl">📅</div>
+                <div>
+                  <h3 className="font-semibold text-gray-800 text-sm">Saturday Awareness</h3>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Minimizes Saturday labs (VTU 1st & 3rd Saturday holidays)
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white border border-purple-200 rounded-lg p-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="text-2xl">📚</div>
+                <div>
+                  <h3 className="font-semibold text-gray-800 text-sm">VTU 2024 Types</h3>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Full support for PCC, PCCL, UHV, AEC, SEC, ESC, and more
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* View Existing Timetable */}
@@ -692,9 +733,46 @@ export default function TimetablePage() {
               </div>
             </div>
 
+            {/* Subject Types Guide */}
+            <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-5">
+              <div className="flex items-start gap-3">
+                <div className="text-2xl">📚</div>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-gray-800 mb-2">VTU Subject Classification Guide</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+                    <div className="bg-white rounded p-2">
+                      <span className="font-bold text-blue-700">PCC:</span> Professional Core Course
+                    </div>
+                    <div className="bg-white rounded p-2">
+                      <span className="font-bold text-blue-700">PCCL:</span> Professional Core Lab
+                    </div>
+                    <div className="bg-white rounded p-2">
+                      <span className="font-bold text-purple-700">PEC:</span> Professional Elective
+                    </div>
+                    <div className="bg-white rounded p-2">
+                      <span className="font-bold text-purple-700">OEC:</span> Open Elective
+                    </div>
+                    <div className="bg-white rounded p-2">
+                      <span className="font-bold text-green-700">UHV:</span> Universal Human Value
+                    </div>
+                    <div className="bg-white rounded p-2">
+                      <span className="font-bold text-orange-700">PROJ:</span> Project Work
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-700 mt-3 bg-yellow-50 border border-yellow-200 rounded p-2">
+                    <strong>Important:</strong> Whether a subject has theory or lab sessions is determined by the <strong>hours you specify</strong>, not the subject type. For example, PCC can have both theory and lab if you enter values for both.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* Subjects Table */}
             <div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Subject Details</h3>
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800">Subject Details</h3>
+                </div>
+              </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200 border border-gray-200">
                   <thead className="bg-gray-100">
@@ -751,17 +829,27 @@ export default function TimetablePage() {
                               handleSubjectChange(index, "subject_type", e.target.value)
                             }
                             className="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                            title="VTU Subject Categories"
+                            title="VTU Subject Categories - Theory/Lab determined by hours you specify"
                           >
                             <option value="">Select Type</option>
-                            <option value="IPCC">IPCC - Theory + Lab</option>
-                            <option value="PCC">PCC - Theory Only</option>
-                            <option value="PCCL">PCCL - Lab Only</option>
-                            <option value="PEC">PEC - Elective Theory</option>
-                            <option value="OEC">OEC - Open Elective</option>
-                            <option value="HSMC">HSMC - Humanities</option>
-                            <option value="MP">MP - Project</option>
-                            <option value="INT">INT - Internship</option>
+                            <optgroup label="VTU 2024 Subject Types">
+                              <option value="PCC">PCC - Professional Core Course</option>
+                              <option value="PCCL">PCCL - Professional Core Course Laboratory</option>
+                              <option value="PEC">PEC - Professional Elective Course</option>
+                              <option value="OEC">OEC - Open Elective Course</option>
+                              <option value="UHV">UHV - Universal Human Value Course</option>
+                              <option value="MC">MC - Mandatory Course (Non-credit)</option>
+                              <option value="AEC">AEC - Ability Enhancement Course</option>
+                              <option value="SEC">SEC - Skill Enhancement Course</option>
+                              <option value="ESC">ESC - Engineering Science Course</option>
+                              <option value="PROJ">PROJ - Project Work</option>
+                            </optgroup>
+                            <optgroup label="Legacy Types (Old Curriculum)">
+                              <option value="IPCC">IPCC - Integrated Professional Core</option>
+                              <option value="HSMC">HSMC - Humanities</option>
+                              <option value="MP">MP - Major/Mini Project</option>
+                              <option value="INT">INT - Internship</option>
+                            </optgroup>
                           </select>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">

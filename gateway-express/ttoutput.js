@@ -206,11 +206,21 @@ async function generatePDF(res, timetableData, sectionInfo, facultyMap) {
   let cursorY = topY;
   doc.font('Helvetica-Bold').fontSize(14).text('Anjuman Institute of Technology and Management', leftX, cursorY, { width: pageW, align: 'center' });
   doc.moveDown(0.2);
-  doc.font('Helvetica').fontSize(8).text('(Approved by VTU, Affiliated to Visveswaraya Bhatkal, Anjumanabad, Belalkanda, Bhatkal, Karnataka)', leftX, cursorY + 18, { width: pageW, align: 'center' });
+  doc.font('Helvetica').fontSize(8).text('(Approved by VTU, Affiliated to Visveswaraya Bhatkal, Anjumanabad, Belalkanda, Bhatkal, Karnataka 581320)', leftX, cursorY + 18, { width: pageW, align: 'center' });
   doc.font('Helvetica-Bold').fontSize(10).text('Department of Computer Science and Engineering', leftX, cursorY + 32, { width: pageW, align: 'center' });
   const AY = `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`;
-  doc.font('Helvetica').fontSize(9).text(`Time Table – AY: ${AY} (Odd Semester)`, leftX, cursorY + 46, { width: pageW, align: 'center' });
-  cursorY += headerH; // move cursor to top of table area
+  doc.font('Helvetica').fontSize(9).text(`Time Table – AY: ${AY} (Odd Semester) with effect from ${new Date().toLocaleDateString('en-IN')}`, leftX, cursorY + 46, { width: pageW, align: 'center' });
+
+  // Section information line
+  cursorY += 62;
+  const roomNo = sectionInfo.classroom || 'N/A';
+  const semYear = sectionInfo.semester || 'N/A';
+  doc.font('Helvetica-Bold').fontSize(9);
+  doc.text(`ROOM No: ${roomNo}`, leftX, cursorY, { continued: true });
+  doc.text(`    Sem / Year: ${semYear}`, { continued: true });
+  doc.text(`    Regulation: 2022`, { continued: true });
+  doc.text(`    Class Advisor: [To be assigned]`, { align: 'left' });
+  cursorY += 14; // move cursor to top of table area
 
   // Draw header row boxes and labels
   for (let ci = 0; ci < mapCols.length; ci++) {
@@ -242,13 +252,12 @@ async function generatePDF(res, timetableData, sectionInfo, facultyMap) {
       const col = mapCols[ci];
       const x = colXPositions[ci];
 
-      // Draw cell border for visual grid (we will overwrite with merged rect if needed)
-      doc.rect(x, rowY, col.width, rowH).stroke();
-
-      // If this is a break/lunch small column (gridIndex === null) — skip content; merged vertical labels drawn later
+      // If this is a break/lunch column - don't draw border yet (will be drawn as merged cell later)
       if (col.gridIndex === null) {
         continue;
       }
+
+      // Don't draw border yet - we'll determine if it needs merging first
 
       // Determine slots in this period
       const slots = grid[r][col.gridIndex] || [];
@@ -286,7 +295,7 @@ async function generatePDF(res, timetableData, sectionInfo, facultyMap) {
         let mergedWidth = 0;
         for (let k = 0; k < mergedSpan; k++) mergedWidth += mapCols[ci + k].width;
 
-        // Draw merged rect (covering the first column and next mergedSpan-1 columns)
+        // Draw merged rect WITHOUT internal borders - single clean border
         doc.rect(x, rowY, mergedWidth, rowH).stroke();
 
         // write subject and faculty once, centered in merged rect
@@ -305,14 +314,16 @@ async function generatePDF(res, timetableData, sectionInfo, facultyMap) {
         continue; // processed merged block
       }
 
-      // No horizontal merge — handle single column content:
+      // No horizontal merge — draw single cell border and handle content:
+      doc.rect(x, rowY, col.width, rowH).stroke();
+
       if (slots.length === 0) {
         doc.font('Helvetica').fontSize(7).fillColor('#666').text('—', x, rowY + (rowH / 2) - 6, { width: col.width, align: 'center' });
         doc.fillColor('#000');
       } else if (slots.length > 1 && slots.every(s => !s.is_theory)) {
         // Parallel labs in same period (different batches) — compact into one line
         const labText = slots.sort((a,b) => (a.batch_number||0)-(b.batch_number||0))
-          .map(s => `${s.subject_code} LAB(B${s.batch_number||0})`).join(' / ');
+          .map(s => `${s.subject_code} LAB(B${s.batch_number||0})`).join('/');
         doc.font('Helvetica-Bold').fontSize(7).text(labText, x + 4, rowY + 6, { width: col.width - 8, align: 'center' });
       } else {
         const slot = slots[0];
@@ -326,7 +337,7 @@ async function generatePDF(res, timetableData, sectionInfo, facultyMap) {
     }
   }
 
-  // Draw merged vertical text for BREAK and LUNCH columns (spanning whole body)
+  // Draw merged vertical BREAK and LUNCH columns with single clean border
   const breakColIndex = 3;
   const lunchColIndex = 6;
   const breakX = colXPositions[breakColIndex];
@@ -335,8 +346,14 @@ async function generatePDF(res, timetableData, sectionInfo, facultyMap) {
   const mergedTopY = rowStartY;
   const mergedHeight = mergedRowsHeight;
 
-  (function drawVerticalLabel(text, colIndex, xPos, fontSize = 9) {
+  // Draw BREAK column - single border for entire merged area
+  (function drawMergedBreakColumn(colIndex, xPos, text, fontSize = 9) {
     const col = mapCols[colIndex];
+
+    // Draw single border around entire merged area (no internal lines)
+    doc.rect(xPos, mergedTopY, col.width, mergedHeight).stroke();
+
+    // Draw vertical text
     const centerX = xPos + col.width / 2;
     const centerY = mergedTopY + mergedHeight / 2;
     doc.save();
@@ -345,10 +362,16 @@ async function generatePDF(res, timetableData, sectionInfo, facultyMap) {
     const fakeY = centerY - (col.width / 2) - Math.round(fontSize / 2);
     doc.font('Helvetica-Bold').fontSize(fontSize).text(text, fakeX, fakeY, { width: mergedHeight, align: 'center' });
     doc.restore();
-  })('BREAK', breakColIndex, breakX, 9);
+  })(breakColIndex, breakX, 'BREAK', 9);
 
-  (function drawVerticalLabel(text, colIndex, xPos, fontSize = 8) {
+  // Draw LUNCH BREAK column - single border for entire merged area
+  (function drawMergedLunchColumn(colIndex, xPos, text, fontSize = 8) {
     const col = mapCols[colIndex];
+
+    // Draw single border around entire merged area (no internal lines)
+    doc.rect(xPos, mergedTopY, col.width, mergedHeight).stroke();
+
+    // Draw vertical text
     const centerX = xPos + col.width / 2;
     const centerY = mergedTopY + mergedHeight / 2;
     doc.save();
@@ -357,47 +380,34 @@ async function generatePDF(res, timetableData, sectionInfo, facultyMap) {
     const fakeY = centerY - (col.width / 2) - Math.round(fontSize / 2);
     doc.font('Helvetica-Bold').fontSize(fontSize).text(text, fakeX, fakeY, { width: mergedHeight, align: 'center' });
     doc.restore();
-  })('LUNCH BREAK', lunchColIndex, lunchX, 8);
+  })(lunchColIndex, lunchX, 'LUNCH BREAK', 8);
 
-  // Legend area: to the right of table within legendW
-  const legendX = leftX + actualTableW + 12; // 12 px gap
-  const legendTop = cursorY;
-  doc.font('Helvetica-Bold').fontSize(10).text('Faculty Assignments', legendX, legendTop, { width: legendW, align: 'left' });
-
-  // Build legend entries
+  // Faculty mapping at bottom (horizontal format like the PDF)
+  const mappingY = rowStartY + mergedRowsHeight + 16;
   const subjectMap = getSubjectFacultyMapping(timetableData, facultyMap);
-  const legendEntries = [];
+
+  // Build faculty mapping entries in horizontal format
+  const mappingEntries = [];
   Object.entries(subjectMap).forEach(([sub, info]) => {
     if (info.theory_faculty) {
-      legendEntries.push({ label: `${sub} (Theory)`, value: facultyMap[info.theory_faculty] || info.theory_faculty });
+      const facultyName = facultyMap[info.theory_faculty] || info.theory_faculty;
+      mappingEntries.push(`${sub}: ${facultyName}`);
     }
     if (info.lab_faculty && info.lab_faculty !== info.theory_faculty) {
-      legendEntries.push({ label: `${sub} (Lab)`, value: facultyMap[info.lab_faculty] || info.lab_faculty });
+      const labFacultyName = facultyMap[info.lab_faculty] || info.lab_faculty;
+      mappingEntries.push(`${sub} LAB: ${labFacultyName}`);
     }
   });
 
-  // Two-column layout for legend
-  const colGap = 8;
-  const colWidth = Math.floor((legendW - colGap) / 2);
-  let lX = legendX;
-  let lY = legendTop + 18;
-  const maxLegendRows = Math.floor((availH - 18) / 12);
-  let fontSizeLegend = 8;
-  if (legendEntries.length > maxLegendRows) {
-    fontSizeLegend = Math.max(6, Math.floor(8 * (maxLegendRows / legendEntries.length)));
-  }
-  doc.font('Helvetica').fontSize(fontSizeLegend);
-  for (let i = 0; i < legendEntries.length; i++) {
-    const colIndex = i % 2;
-    if (colIndex === 0) {
-      lX = legendX;
-      if (i !== 0) lY += 12;
-    } else {
-      lX = legendX + colWidth + colGap;
-    }
-    const entry = legendEntries[i];
-    const textLine = `${entry.label}: ${entry.value}`;
-    doc.text(textLine, lX, lY, { width: colWidth, align: 'left' });
+  // Draw faculty mapping in rows (3-4 entries per row)
+  doc.font('Helvetica').fontSize(8);
+  const entriesPerRow = 3;
+  let currentY = mappingY;
+  for (let i = 0; i < mappingEntries.length; i += entriesPerRow) {
+    const rowEntries = mappingEntries.slice(i, i + entriesPerRow);
+    const rowText = rowEntries.join('    |    ');
+    doc.text(rowText, leftX, currentY, { width: actualTableW, align: 'left' });
+    currentY += 12;
   }
 
   // Footer signatures
@@ -416,109 +426,124 @@ async function generatePDF(res, timetableData, sectionInfo, facultyMap) {
 async function generateWord(res, timetableData, sectionInfo, facultyMap) {
   const grid = buildTimetableGrid(timetableData);
   const days = ['MON', 'TUE', 'WED', 'THUR', 'FRI/SUN', 'SAT'];
-  const periods = [
-    '1\n(9:00 AM - 9:55 AM)',
-    '2\n(9:55 AM - 10:50 AM)',
-    '3\n(11:05 AM - 12:00 PM)',
-    '4\n(12:00 PM - 12:55 PM)',
-    '5\n(2:00 PM - 2:55 PM)',
-    '6\n(2:55 PM - 3:50 PM)',
-    '7\n(3:50 PM - 4:45 PM)'
+
+  // Column mapping with breaks (10 columns total to match PDF)
+  const columnMap = [
+    { type: 'day', label: 'DAY / TIME' },
+    { type: 'period', label: '1\n(9:00-9:55)', periodIndex: 0 },
+    { type: 'period', label: '2\n(9:55-10:50)', periodIndex: 1 },
+    { type: 'break', label: 'BREAK\n(10:55-11:05)' },
+    { type: 'period', label: '3\n(11:05-12:00)', periodIndex: 2 },
+    { type: 'period', label: '4\n(12:00-12:55)', periodIndex: 3 },
+    { type: 'break', label: 'LUNCH\nBREAK\n(1:00-2:00)' },
+    { type: 'period', label: '5\n(2:00-2:55)', periodIndex: 4 },
+    { type: 'period', label: '6\n(2:55-3:50)', periodIndex: 5 },
+    { type: 'period', label: '7\n(3:50-4:45)', periodIndex: 6 }
   ];
 
   // Build table rows
   const tableRows = [];
 
   // Header row
-  const headerCells = [
+  const headerCells = columnMap.map(col =>
     new TableCell({
       children: [new Paragraph({
-        text: 'DAY / TIME',
+        text: col.label.replace(/\n/g, ' '),
         alignment: AlignmentType.CENTER,
         bold: true
       })],
       shading: { fill: 'D3D3D3' },
-      verticalAlign: VerticalAlign.CENTER
+      verticalAlign: VerticalAlign.CENTER,
+      width: { size: col.type === 'break' ? 800 : 1400, type: WidthType.DXA }
     })
-  ];
-
-  periods.forEach(p => {
-    headerCells.push(new TableCell({
-      children: [new Paragraph({
-        text: p.replace('\n', ' '),
-        alignment: AlignmentType.CENTER
-      })],
-      shading: { fill: 'D3D3D3' },
-      verticalAlign: VerticalAlign.CENTER
-    }));
-  });
+  );
 
   tableRows.push(new TableRow({ children: headerCells, height: { value: 600, rule: 'atLeast' } }));
 
-  // Data rows
+  // Data rows with vertical merge for breaks
   days.forEach((day, dayIndex) => {
-    const cells = [
-      new TableCell({
-        children: [new Paragraph({
-          text: day,
-          alignment: AlignmentType.CENTER,
-          bold: true
-        })],
-        shading: { fill: 'F0F0F0' },
-        verticalAlign: VerticalAlign.CENTER
-      })
-    ];
+    const cells = [];
 
-    periods.forEach((_, periodIndex) => {
-      const slots = grid[dayIndex][periodIndex];
-      let cellContent = [];
-
-      if (slots.length === 0) {
-        cellContent.push(new Paragraph({
-          text: '--------',
-          alignment: AlignmentType.CENTER
+    columnMap.forEach((col, colIndex) => {
+      // Day column
+      if (col.type === 'day') {
+        cells.push(new TableCell({
+          children: [new Paragraph({
+            text: day,
+            alignment: AlignmentType.CENTER,
+            bold: true
+          })],
+          shading: { fill: 'F0F0F0' },
+          verticalAlign: VerticalAlign.CENTER
         }));
-      } else if (slots.length > 1 && slots.every(s => !s.is_theory)) {
-        // Parallel labs
-        const labText = slots
-          .sort((a, b) => (a.batch_number || 0) - (b.batch_number || 0))
-          .map(s => `${s.subject_code} LAB(B${s.batch_number})`)
-          .join('/');
-
-        cellContent.push(new Paragraph({
-          text: labText,
-          alignment: AlignmentType.CENTER,
-          bold: true
-        }));
-      } else {
-        const slot = slots[0];
-        const facName = facultyMap[slot.faculty_id] || slot.faculty_id;
-
-        cellContent.push(new Paragraph({
-          text: slot.subject_code,
-          alignment: AlignmentType.CENTER,
-          bold: true
-        }));
-        cellContent.push(new Paragraph({
-          text: slot.subject_type || '',
-          alignment: AlignmentType.CENTER
-        }));
-        cellContent.push(new Paragraph({
-          text: facName,
-          alignment: AlignmentType.CENTER
-        }));
-        if (!slot.is_theory) {
-          cellContent.push(new Paragraph({
-            text: slot.room_id,
-            alignment: AlignmentType.CENTER
+      }
+      // Break columns - only add for first row (will be merged vertically)
+      else if (col.type === 'break') {
+        if (dayIndex === 0) {
+          cells.push(new TableCell({
+            children: [new Paragraph({
+              text: col.label.includes('LUNCH') ? 'LUNCH BREAK' : 'BREAK',
+              alignment: AlignmentType.CENTER,
+              bold: true
+            })],
+            shading: { fill: 'FFE0B2' },
+            verticalAlign: VerticalAlign.CENTER,
+            rowSpan: days.length  // Merge all 6 rows
           }));
         }
+        // Skip for other rows (merged cells)
       }
+      // Period columns
+      else if (col.type === 'period') {
+        const slots = grid[dayIndex][col.periodIndex];
+        let cellContent = [];
 
-      cells.push(new TableCell({
-        children: cellContent,
-        verticalAlign: VerticalAlign.CENTER
-      }));
+        if (slots.length === 0) {
+          cellContent.push(new Paragraph({
+            text: '--------',
+            alignment: AlignmentType.CENTER
+          }));
+        } else if (slots.length > 1 && slots.every(s => !s.is_theory)) {
+          // Parallel labs
+          const labText = slots
+            .sort((a, b) => (a.batch_number || 0) - (b.batch_number || 0))
+            .map(s => `${s.subject_code} LAB(B${s.batch_number})`)
+            .join('/');
+
+          cellContent.push(new Paragraph({
+            text: labText,
+            alignment: AlignmentType.CENTER,
+            bold: true
+          }));
+        } else {
+          const slot = slots[0];
+          const facName = facultyMap[slot.faculty_id] || slot.faculty_id;
+
+          cellContent.push(new Paragraph({
+            text: slot.subject_code,
+            alignment: AlignmentType.CENTER,
+            bold: true
+          }));
+          cellContent.push(new Paragraph({
+            text: facName,
+            alignment: AlignmentType.CENTER,
+            size: 18
+          }));
+          if (!slot.is_theory && slot.room_id) {
+            cellContent.push(new Paragraph({
+              text: slot.room_id,
+              alignment: AlignmentType.CENTER,
+              size: 16
+            }));
+          }
+        }
+
+        cells.push(new TableCell({
+          children: cellContent,
+          verticalAlign: VerticalAlign.CENTER,
+          shading: { fill: slots.length > 0 && !slots[0].is_theory ? 'E3F2FD' : 'E8F5E9' }
+        }));
+      }
     });
 
     tableRows.push(new TableRow({
@@ -647,95 +672,124 @@ async function generateExcel(res, timetableData, sectionInfo, facultyMap) {
 
   const grid = buildTimetableGrid(timetableData);
   const days = ['MON', 'TUE', 'WED', 'THUR', 'FRI/SUN', 'SAT'];
-  const periods = [
-    '1\n(9:00 AM - 9:55 AM)',
-    '2\n(9:55 AM - 10:50 AM)',
-    '3\n(11:05 AM - 12:00 PM)',
-    '4\n(12:00 PM - 12:55 PM)',
-    '5\n(2:00 PM - 2:55 PM)',
-    '6\n(2:55 PM - 3:50 PM)',
-    '7\n(3:50 PM - 4:45 PM)'
+
+  // Column mapping with breaks (10 columns total to match PDF)
+  const columnMap = [
+    { type: 'day', label: 'DAY / TIME', width: 12 },
+    { type: 'period', label: '1 (9:00-9:55)', periodIndex: 0, width: 18 },
+    { type: 'period', label: '2 (9:55-10:50)', periodIndex: 1, width: 18 },
+    { type: 'break', label: 'BREAK', width: 8 },
+    { type: 'period', label: '3 (11:05-12:00)', periodIndex: 2, width: 18 },
+    { type: 'period', label: '4 (12:00-12:55)', periodIndex: 3, width: 18 },
+    { type: 'break', label: 'LUNCH BREAK', width: 10 },
+    { type: 'period', label: '5 (2:00-2:55)', periodIndex: 4, width: 18 },
+    { type: 'period', label: '6 (2:55-3:50)', periodIndex: 5, width: 18 },
+    { type: 'period', label: '7 (3:50-4:45)', periodIndex: 6, width: 18 }
   ];
 
   // Set column widths
-  worksheet.columns = [
-    { width: 12 },
-    ...Array(7).fill({ width: 20 })
-  ];
+  worksheet.columns = columnMap.map(col => ({ width: col.width }));
 
-  // Title rows
-  worksheet.mergeCells('A1:H1');
+  // Title rows (now merge across 10 columns A-J)
+  worksheet.mergeCells('A1:J1');
   worksheet.getCell('A1').value = 'Anjuman Institute of Technology and Management';
   worksheet.getCell('A1').font = { bold: true, size: 14 };
   worksheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
 
-  worksheet.mergeCells('A2:H2');
+  worksheet.mergeCells('A2:J2');
   worksheet.getCell('A2').value = '(Approved by VTU, Affiliated to Visveswaraya Bhatkal, Anjumanabad, Belalkanda, Bhatkal, Karnataka 581320)';
   worksheet.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
   worksheet.getRow(2).height = 30;
 
-  worksheet.mergeCells('A3:H3');
+  worksheet.mergeCells('A3:J3');
   worksheet.getCell('A3').value = 'Department of Computer Science and Engineering';
   worksheet.getCell('A3').font = { bold: true, size: 12 };
   worksheet.getCell('A3').alignment = { horizontal: 'center', vertical: 'middle' };
 
   const currentYear = new Date().getFullYear();
-  worksheet.mergeCells('A5:H5');
+  worksheet.mergeCells('A5:J5');
   worksheet.getCell('A5').value = `Time Table – AY: ${currentYear}-${currentYear + 1} (Odd Semester)`;
   worksheet.getCell('A5').font = { bold: true, size: 12 };
   worksheet.getCell('A5').alignment = { horizontal: 'center', vertical: 'middle' };
 
-  worksheet.mergeCells('A6:H6');
+  worksheet.mergeCells('A6:J6');
   worksheet.getCell('A6').value = `ROOM No: ${sectionInfo.classroom}    Sem/Year: ${sectionInfo.semester}/2025    Regulation: 2022    Class Advisor: ${sectionInfo.class_advisor || 'TBD'}`;
   worksheet.getCell('A6').font = { bold: true };
   worksheet.getCell('A6').alignment = { horizontal: 'center', vertical: 'middle' };
 
   // Header row
   const headerRow = worksheet.getRow(8);
-  headerRow.values = ['DAY/TIME', ...periods.map(p => p.replace('\n', ' '))];
+  headerRow.values = columnMap.map(col => col.label);
   headerRow.font = { bold: true };
   headerRow.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
   headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
   headerRow.height = 40;
 
-  // Data rows
+  // Data rows with vertical merge for breaks
   days.forEach((day, dayIndex) => {
     const row = worksheet.getRow(9 + dayIndex);
     row.height = 60;
-    row.getCell(1).value = day;
-    row.getCell(1).font = { bold: true };
-    row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
-    row.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
 
-    periods.forEach((_, periodIndex) => {
-      const cell = row.getCell(periodIndex + 2);
-      const slots = grid[dayIndex][periodIndex];
+    let excelCol = 1;
 
-      if (slots.length === 0) {
-        cell.value = '--------';
-        cell.font = { color: { argb: 'FF999999' } };
-      } else if (slots.length > 1 && slots.every(s => !s.is_theory)) {
-        const labText = slots
-          .sort((a, b) => (a.batch_number || 0) - (b.batch_number || 0))
-          .map(s => `${s.subject_code} LAB(B${s.batch_number})`)
-          .join('/');
-        cell.value = labText;
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE3F2FD' } };
+    columnMap.forEach((col, colIndex) => {
+      const cell = row.getCell(excelCol);
+
+      // Day column
+      if (col.type === 'day') {
+        cell.value = day;
         cell.font = { bold: true };
-      } else {
-        const slot = slots[0];
-        const facName = facultyMap[slot.faculty_id] || slot.faculty_id;
-        cell.value = `${slot.subject_code}\n${slot.subject_type || ''}\n${facName}` + (!slot.is_theory ? `\n${slot.room_id}` : '');
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: slot.is_theory ? 'FFE8F5E9' : 'FFE3F2FD' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
+        excelCol++;
       }
+      // Break columns - merge vertically for all rows
+      else if (col.type === 'break') {
+        if (dayIndex === 0) {
+          // Merge cells vertically (e.g., D9:D14 for 6 days)
+          const startRow = 9;
+          const endRow = 9 + days.length - 1;
+          const colLetter = String.fromCharCode(64 + excelCol); // Convert to A, B, C, etc.
+          worksheet.mergeCells(`${colLetter}${startRow}:${colLetter}${endRow}`);
 
-      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+          cell.value = col.label;
+          cell.font = { bold: true };
+          cell.alignment = { horizontal: 'center', vertical: 'middle', textRotation: 90 };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE0B2' } };
+        }
+        excelCol++;
+      }
+      // Period columns
+      else if (col.type === 'period') {
+        const slots = grid[dayIndex][col.periodIndex];
+
+        if (slots.length === 0) {
+          cell.value = '--------';
+          cell.font = { color: { argb: 'FF999999' } };
+        } else if (slots.length > 1 && slots.every(s => !s.is_theory)) {
+          const labText = slots
+            .sort((a, b) => (a.batch_number || 0) - (b.batch_number || 0))
+            .map(s => `${s.subject_code} LAB(B${s.batch_number})`)
+            .join('/');
+          cell.value = labText;
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE3F2FD' } };
+          cell.font = { bold: true };
+        } else {
+          const slot = slots[0];
+          const facName = facultyMap[slot.faculty_id] || slot.faculty_id;
+          cell.value = `${slot.subject_code}\n${facName}` + (!slot.is_theory && slot.room_id ? `\n${slot.room_id}` : '');
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: slot.is_theory ? 'FFE8F5E9' : 'FFE3F2FD' } };
+        }
+
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        excelCol++;
+      }
     });
   });
 
-  // Add borders
+  // Add borders (10 columns now)
   for (let row = 8; row <= 8 + days.length; row++) {
-    for (let col = 1; col <= 8; col++) {
+    for (let col = 1; col <= 10; col++) {
       worksheet.getCell(row, col).border = {
         top: { style: 'thin' },
         left: { style: 'thin' },
@@ -745,29 +799,31 @@ async function generateExcel(res, timetableData, sectionInfo, facultyMap) {
     }
   }
 
-  // Faculty legend
+  // Faculty legend (horizontal format like PDF)
   const legendStartRow = 9 + days.length + 2;
   const subjectFacultyMap = getSubjectFacultyMapping(timetableData, facultyMap);
 
-  worksheet.mergeCells(`A${legendStartRow}:H${legendStartRow}`);
-  worksheet.getCell(`A${legendStartRow}`).value = 'Faculty Assignment:';
-  worksheet.getCell(`A${legendStartRow}`).font = { bold: true };
-
-  let legendRow = legendStartRow + 1;
+  // Build legend entries
+  const legendEntries = [];
   Object.entries(subjectFacultyMap).forEach(([subject, info]) => {
     if (info.theory_faculty) {
       const facName = facultyMap[info.theory_faculty] || info.theory_faculty;
-      worksheet.mergeCells(`A${legendRow}:H${legendRow}`);
-      worksheet.getCell(`A${legendRow}`).value = `${subject}: ${facName}`;
-      legendRow++;
+      legendEntries.push(`${subject}: ${facName}`);
     }
     if (info.lab_faculty && info.lab_faculty !== info.theory_faculty) {
       const facName = facultyMap[info.lab_faculty] || info.lab_faculty;
-      worksheet.mergeCells(`A${legendRow}:H${legendRow}`);
-      worksheet.getCell(`A${legendRow}`).value = `${subject} LAB: ${facName}`;
-      legendRow++;
+      legendEntries.push(`${subject} LAB: ${facName}`);
     }
   });
+
+  // Display horizontally (3 per row)
+  let legendRow = legendStartRow;
+  for (let i = 0; i < legendEntries.length; i += 3) {
+    const rowEntries = legendEntries.slice(i, i + 3);
+    worksheet.mergeCells(`A${legendRow}:J${legendRow}`);
+    worksheet.getCell(`A${legendRow}`).value = rowEntries.join('    |    ');
+    legendRow++;
+  }
 
   // Footer
   const footerRow = legendRow + 2;

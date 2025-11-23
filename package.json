@@ -1,0 +1,29 @@
+{
+  "name": "uni-smart",
+  "version": "5.1.0",
+  "description": "Uni-Smart Academic Management System - Microservices Architecture",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently --kill-others-on-fail --prefix-colors \"cyan,magenta,yellow,green,blue\" -n \"GATEWAY,FRONTEND,TIMETABLE,RESULTS,EXAMSEATING\" \"npm run dev:gateway\" \"npm run dev:frontend\" \"npm run dev:timetable\" \"npm run dev:results\" \"npm run dev:examseating\"",
+    "dev:gateway": "cd gateway-express && npm start",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:timetable": "cd service-timetable-python && call venv\\Scripts\\activate.bat && python app.py",
+    "dev:results": "cd \"result analysis\" && call venv\\Scripts\\activate.bat && python manage.py runserver 8001",
+    "dev:examseating": "cd service-examseating-python && call venv\\Scripts\\activate.bat && python app.py",
+    "install:all": "npm run install:gateway && npm run install:frontend && npm run install:python",
+    "install:gateway": "cd gateway-express && npm install",
+    "install:frontend": "cd frontend && npm install",
+    "install:python": "npm run setup:venv:timetable && npm run setup:venv:results && npm run setup:venv:examseating",
+    "setup:venv:timetable": "cd service-timetable-python && (if not exist venv python -m venv venv) && call venv\\Scripts\\activate.bat && pip install -r requirements.txt",
+    "setup:venv:results": "cd \"result analysis\" && (if not exist venv python -m venv venv) && call venv\\Scripts\\activate.bat && pip install -r requirements.txt",
+    "setup:venv:examseating": "cd service-examseating-python && (if not exist venv python -m venv venv) && call venv\\Scripts\\activate.bat && pip install -r requirements.txt"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0",
+    "python": ">=3.9.0"
+  }
+}

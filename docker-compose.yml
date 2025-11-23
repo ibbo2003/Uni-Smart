@@ -1,0 +1,136 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: unismart-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: unismart_db
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - unismart-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # Gateway Service (Express)
+  gateway:
+    build:
+      context: ./gateway-express
+      dockerfile: Dockerfile
+    container_name: unismart-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=mysql
+      - DB_USER=root
+      - DB_PASSWORD=root
+      - DB_NAME=unismart_db
+      - TIMETABLE_SERVICE_URL=http://timetable:5000
+      - RESULTS_SERVICE_URL=http://results:8001
+      - EXAMSEATING_SERVICE_URL=http://examseating:5001
+    depends_on:
+      mysql:
+        condition: service_healthy
+      timetable:
+        condition: service_started
+      results:
+        condition: service_started
+    networks:
+      - unismart-network
+    restart: unless-stopped
+
+  # Timetable Service (Python Flask)
+  timetable:
+    build:
+      context: ./service-timetable-python
+      dockerfile: Dockerfile
+    container_name: unismart-timetable
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+      - DB_HOST=mysql
+      - DB_USER=root
+      - DB_PASSWORD=root
+      - DB_NAME=unismart_db
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - unismart-network
+    restart: unless-stopped
+
+  # Results Analysis Service (Django)
+  results:
+    build:
+      context: ./result analysis
+      dockerfile: Dockerfile
+    container_name: unismart-results
+    ports:
+      - "8001:8001"
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - DB_HOST=mysql
+      - DB_USER=root
+      - DB_PASSWORD=root
+      - DB_NAME=unismart_db
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - unismart-network
+    restart: unless-stopped
+
+  # Exam Seating Service (Python Flask)
+  examseating:
+    build:
+      context: ./service-examseating-python
+      dockerfile: Dockerfile
+    container_name: unismart-examseating
+    ports:
+      - "5001:5001"
+    environment:
+      - FLASK_ENV=production
+      - DB_HOST=mysql
+      - DB_USER=root
+      - DB_PASSWORD=root
+      - DB_NAME=unismart_db
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - unismart-network
+    restart: unless-stopped
+
+  # Frontend (Next.js)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: unismart-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+    depends_on:
+      - gateway
+    networks:
+      - unismart-network
+    restart: unless-stopped
+
+networks:
+  unismart-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local

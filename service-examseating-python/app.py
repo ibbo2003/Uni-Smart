@@ -6,6 +6,11 @@ import os
 from dotenv import load_dotenv
 from seating_algorithm import arrange_seats
 import traceback
+import pandas as pd
+from docx import Document
+import PyPDF2
+import re
+import io
 
 load_dotenv()
 app = Flask(__name__)

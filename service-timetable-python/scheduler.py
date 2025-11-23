@@ -3,7 +3,23 @@ VTU TIMETABLE SCHEDULER - OPTIMIZED HYBRID VERSION
 ===================================================
 Combines: Genetic Algorithm + Local Search + CSP + Tabu Search
 Author: Student Package Website Project
-Version: 5.0 (Highly Optimized)
+Version: 5.1 (Enhanced VTU Compliance)
+
+🆕 VERSION 5.1 ENHANCEMENTS:
+============================
+1. ✅ Updated VTU Subject Types: PCC, PCCL, PEC, OEC, UHV, MC, AEC, SEC, ESC, PROJ
+   - Theory/Lab determined by actual hours (not subject type)
+   - Legacy support for old types (IPCC, HSMC, MP, INT)
+
+2. ✅ Smart Lab Scheduling with Projects:
+   - If section has NO projects → labs can use afternoon slots freely
+   - If section HAS projects → labs avoid afternoon ONLY on days with projects
+   - Other days can utilize afternoon for labs (maximizes flexibility)
+
+3. ✅ VTU Saturday Holiday Awareness:
+   - Penalizes lab scheduling on Saturdays (1st & 3rd Saturday holidays)
+   - Projects exempt from Saturday penalty
+   - Helps distribute labs across weekdays
 """
 
 import random
@@ -71,48 +87,56 @@ class TimeSlot:
 # ===========================
 
 class VTUSubjectValidator:
+    """
+    VTU Subject Type Validator - Updated Classification
+    Theory/Lab determined by actual hours, not subject type
+    """
     SUBJECT_TYPES = {
-        'IPCC': {'has_theory': True, 'has_lab': True, 'is_project': False},
-        'PCC': {'has_theory': True, 'has_lab': False, 'is_project': False},
-        'PCCL': {'has_theory': False, 'has_lab': True, 'is_project': False},
-        'PEC': {'has_theory': True, 'has_lab': False, 'is_project': False},
-        'OEC': {'has_theory': True, 'has_lab': False, 'is_project': False},
-        'HSMC': {'has_theory': True, 'has_lab': False, 'is_project': False},
-        'MP': {'has_theory': False, 'has_lab': True, 'is_project': True},
-        'INT': {'has_theory': False, 'has_lab': False, 'is_project': False}
+        'PCC': {'is_project': False, 'description': 'Professional Core Course'},
+        'PCCL': {'is_project': False, 'description': 'Professional Core Course Laboratory'},
+        'PEC': {'is_project': False, 'description': 'Professional Elective Course'},
+        'OEC': {'is_project': False, 'description': 'Open Elective Course'},
+        'UHV': {'is_project': False, 'description': 'Universal Human Value Course'},
+        'MC': {'is_project': False, 'description': 'Mandatory Course (Non-credit)'},
+        'AEC': {'is_project': False, 'description': 'Ability Enhancement Course'},
+        'SEC': {'is_project': False, 'description': 'Skill Enhancement Course'},
+        'ESC': {'is_project': False, 'description': 'Engineering Science Course'},
+        'PROJ': {'is_project': True, 'description': 'Project Work'},
+
+        # Legacy support (old types)
+        'IPCC': {'is_project': False, 'description': 'Integrated Professional Core'},
+        'HSMC': {'is_project': False, 'description': 'Humanities'},
+        'MP': {'is_project': True, 'description': 'Major/Mini Project'},
+        'INT': {'is_project': False, 'description': 'Internship'}
     }
-    
+
     @classmethod
     def validate_subject(cls, subject: Subject) -> bool:
+        """
+        Validate subject type exists.
+        Theory/Lab is determined by actual hours, not subject type.
+        """
         subject_type = subject.subject_type.upper()
         if subject_type not in cls.SUBJECT_TYPES:
-            raise ValueError(f"Invalid subject type '{subject_type}'")
-        
-        rules = cls.SUBJECT_TYPES[subject_type]
-        if not rules['has_theory'] and subject.theory_hours > 0:
-            subject.theory_hours = 0
-        if not rules['has_lab'] and subject.lab_hours > 0:
-            subject.lab_hours = 0
-        
+            print(f"⚠️  Warning: Unknown subject type '{subject_type}', treating as regular subject")
+            # Don't raise error, just warn and continue
         return True
-    
+
     @classmethod
     def is_project(cls, subject_type: str) -> bool:
-        return subject_type.upper() in ['MP', 'PROJ']
-    
+        """Check if subject is a project"""
+        subject_type = subject_type.upper()
+        if subject_type in cls.SUBJECT_TYPES:
+            return cls.SUBJECT_TYPES[subject_type]['is_project']
+        return False
+
     @classmethod
     def get_display_name(cls, subject_type: str) -> str:
-        names = {
-            'IPCC': 'Integrated Professional Core',
-            'PCC': 'Professional Core',
-            'PCCL': 'Professional Core Lab',
-            'PEC': 'Professional Elective',
-            'OEC': 'Open Elective',
-            'HSMC': 'Humanities',
-            'MP': 'Major/Mini Project',
-            'INT': 'Internship'
-        }
-        return names.get(subject_type.upper(), subject_type)
+        """Get display name for subject type"""
+        subject_type = subject_type.upper()
+        if subject_type in cls.SUBJECT_TYPES:
+            return cls.SUBJECT_TYPES[subject_type]['description']
+        return subject_type
 
 
 # ===========================
@@ -302,37 +326,62 @@ class OptimizedTimetableChromosome:
                 scheduled += 1
     
     def _schedule_parallel_labs_csp(self):
-        """Schedule parallel labs using CSP with arc consistency - FIXED"""
-        lab_subjects = [s for s in self.subjects 
+        """
+        Schedule parallel labs using CSP with arc consistency.
+        SMART SCHEDULING: If section has projects, avoid afternoon ONLY on days with projects.
+        Other days can use afternoon slots for labs.
+        """
+        lab_subjects = [s for s in self.subjects
                     if s.lab_hours > 0 and not VTUSubjectValidator.is_project(s.subject_type)]
-        
+
         labs_by_section = defaultdict(list)
         for sub in lab_subjects:
             if sub.lab_faculty:
                 labs_by_section[f"{sub.semester}_{sub.section}"].append(sub)
-        
+
         for section_id, labs in labs_by_section.items():
             if len(labs) < 2:
                 continue
-            
+
             num_subjects = len(labs)
             sessions_needed = num_subjects
-            
-            print(f"\n    🔬 Parallel Lab Scheduling for {section_id}:")
+
+            # ✅ SMART: Track which days have projects for this section
+            project_days = set()
+            for gene in self.genes:
+                if (gene.section_id == section_id and
+                    VTUSubjectValidator.is_project(gene.subject_type)):
+                    project_days.add(gene.day)
+
+            if project_days:
+                print(f"\n    🔬 Parallel Lab Scheduling for {section_id}:")
+                print(f"       Projects scheduled on days: {sorted(project_days)}")
+                print(f"       Labs can use afternoon on other days!")
+            else:
+                print(f"\n    🔬 Parallel Lab Scheduling for {section_id} (no projects):")
+
             print(f"       Subjects: {[lab.subject_code for lab in labs]}")
             print(f"       Rotation sessions needed: {sessions_needed}")
-            
+
             scheduled_sessions = 0
-            
+
             for session_idx in range(sessions_needed):
                 print(f"\n       📅 Session {session_idx + 1}/{sessions_needed}:")
                 slot_found = False
-                
+
                 for day in range(self.days_per_week):
                     if slot_found:
                         break
-                    
-                    for start_period in [0, 2, 4]:
+
+                    # ✅ SMART: Choose valid start periods based on whether THIS DAY has a project
+                    if day in project_days:
+                        # This day has a project in afternoon (4-5-6), so only use morning for labs
+                        valid_start_periods = [0, 2]
+                    else:
+                        # This day is free - can use morning OR afternoon
+                        valid_start_periods = [0, 2, 4]
+
+                    for start_period in valid_start_periods:
                         if slot_found:
                             break
                         
@@ -514,28 +563,29 @@ class OptimizedTimetableChromosome:
     def calculate_fitness(self):
         """Fast fitness calculation using constraint checker"""
         fitness = 1000
-        
+
         # Hard constraints (cached in constraint checker)
         faculty_conflicts = self._count_conflicts_fast('faculty')
         section_conflicts = self._count_conflicts_fast('section')
         room_conflicts = self._count_conflicts_fast('room')
-        
+
         fitness -= faculty_conflicts * 500
         fitness -= section_conflicts * 500
         fitness -= room_conflicts * 400
-        
+
         # Lab continuity
         fitness -= self._check_lab_continuity() * 200
-        
+
         # Project constraints
         fitness -= self._check_project_continuity() * 300
-        
+
         # Soft constraints
         fitness -= self._check_gaps() * 100
         fitness -= self._check_theory_distribution() * 50
-        fitness -= self._penalize_theory_afternoon() * 100 
+        fitness -= self._penalize_theory_afternoon() * 100
         fitness -= self._penalize_sparse_days() * 30
-        
+        fitness -= self._penalize_saturday_labs() * 50  # ✅ VTU Saturday holiday penalty
+
         self.fitness = max(0, fitness)
         return self.fitness
     
@@ -641,17 +691,29 @@ class OptimizedTimetableChromosome:
         """Penalize days with very few classes"""
         violations = 0
         daily_counts = defaultdict(lambda: defaultdict(int))
-        
+
         for gene in self.genes:
             daily_counts[gene.section_id][gene.day] += 1
-        
+
         for counts in daily_counts.values():
             for count in counts.values():
                 if count <= 2:
                     violations += (3 - count)
-        
+
         return violations
-    
+
+    def _penalize_saturday_labs(self) -> int:
+        """
+        Penalize labs scheduled on Saturday (day 5).
+        VTU has 1st and 3rd Saturday as holidays, so minimize Saturday usage.
+        Projects are exempt from this penalty.
+        """
+        count = sum(1 for g in self.genes
+                if not g.is_theory  # Lab sessions only
+                and not VTUSubjectValidator.is_project(g.subject_type)  # Exclude projects
+                and g.day == 5)  # Saturday (assuming Monday=0)
+        return count
+
     def tabu_local_search(self, max_iterations: int = 50, tabu_size: int = 20):
         """Enhanced local search with tabu list"""
         tabu_list = []
@@ -866,8 +928,9 @@ def generate_semester_timetable(subjects_data, faculties_data, sections_data,
     elite_ratio = 0.15
     
     print("\n" + "="*70)
-    print("OPTIMIZED VTU TIMETABLE GENERATION")
+    print("OPTIMIZED VTU TIMETABLE GENERATION v5.1")
     print("Hybrid: Genetic Algorithm + CSP + Tabu Local Search")
+    print("✅ Enhanced: Smart lab scheduling + VTU subject types + Saturday awareness")
     print("="*70)
     
     subjects = [Subject(**s) for s in subjects_data]
@@ -1003,7 +1066,7 @@ def generate_semester_timetable(subjects_data, faculties_data, sections_data,
     elapsed_time = time.time() - start_time
     
     print("\n" + "="*70)
-    print("GENERATION COMPLETE")
+    print("GENERATION COMPLETE (v5.1 - Enhanced VTU Compliance)")
     print("="*70)
     print(f"⏱️  Time Elapsed: {elapsed_time:.2f} seconds")
     print(f"🏆 Best Fitness: {best_ever.fitness:.2f}/1000")
@@ -1063,13 +1126,15 @@ def generate_semester_timetable(subjects_data, faculties_data, sections_data,
     theory_distribution = best_ever._check_theory_distribution()
     theory_afternoon = best_ever._penalize_theory_afternoon()
     sparse_days = best_ever._penalize_sparse_days()
-    
+    saturday_labs = best_ever._penalize_saturday_labs()
+
     print(f"\n  Soft Constraints:")
     print(f"    Schedule Gaps:          {gaps:3d} {'✅' if gaps < 10 else '⚠️'}")
     print(f"    Theory Distribution:    {theory_distribution:3d} {'✅' if theory_distribution < 5 else '⚠️'}")
     print(f"    Theory in Afternoon:    {theory_afternoon:3d} {'✅' if theory_afternoon == 0 else '⚠️'}")
     print(f"    Sparse Days:            {sparse_days:3d} {'✅' if sparse_days < 10 else '⚠️'}")
-    
+    print(f"    Saturday Labs:          {saturday_labs:3d} {'✅' if saturday_labs == 0 else '⚠️'} (VTU 1st & 3rd Sat holiday)")
+
     print("-" * 70)
     
     # ✅ QUALITY ASSESSMENT
@@ -1179,5 +1244,6 @@ def generate_timetable_with_retry(subjects_data, faculties_data, sections_data,
     }
 
 if __name__ == "__main__":
-    print("VTU Timetable Scheduler - Optimized Version 5.0")
+    print("VTU Timetable Scheduler - Version 5.1 (Enhanced VTU Compliance)")
     print("Hybrid GA + CSP + Tabu Local Search")
+    print("✅ Smart lab scheduling • VTU subject types • Saturday awareness")
