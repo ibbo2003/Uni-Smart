@@ -45,7 +45,7 @@ app.post('/api/timetable/generate', async (req, res) => {
     
     // Validate input
     if (!semester || !section || !classroom || !subjects || subjects.length === 0) {
-        console.log('[GATEWAY] ❌ Invalid request: Missing required fields');
+        console.log('[GATEWAY] ERROR: Invalid request: Missing required fields');
         return res.status(400).json({
             success: false,
             message: 'Missing required fields: semester, section, classroom, or subjects'
@@ -61,7 +61,7 @@ app.post('/api/timetable/generate', async (req, res) => {
     try {
         // Connect to database
         connection = await mysql.createConnection(dbConfig);
-        console.log('[GATEWAY] ✅ Database connection successful');
+        console.log('[GATEWAY] SUCCESS: Database connection successful');
 
         // 1. Create/Update section
         const sectionId = `${semester}_${section}`;
@@ -71,7 +71,7 @@ app.post('/api/timetable/generate', async (req, res) => {
              ON DUPLICATE KEY UPDATE classroom=VALUES(classroom)`,
             [sectionId, `${semester} ${section}`, semester, classroom]
         );
-        console.log(`[GATEWAY] ✅ Section ${sectionId} created/updated`);
+        console.log(`[GATEWAY] SUCCESS: Section ${sectionId} created/updated`);
 
         // 2. Insert faculties and subjects
         console.log('[GATEWAY] 💾 Inserting faculties and subjects...');
@@ -115,7 +115,7 @@ app.post('/api/timetable/generate', async (req, res) => {
             );
         }
         
-        console.log('[GATEWAY] ✅ All subjects and faculties saved');
+        console.log('[GATEWAY] SUCCESS: All subjects and faculties saved');
 
         // 3. Prepare data for Python service
         const pythonPayload = {
@@ -134,7 +134,7 @@ app.post('/api/timetable/generate', async (req, res) => {
         };
 
         // 4. Call Python service
-        console.log(`[GATEWAY] ➡️  Calling Python service at ${pythonServiceUrl}...`);
+        console.log(`[GATEWAY] -->  Calling Python service at ${pythonServiceUrl}...`);
         console.log('[GATEWAY] ⏳ This may take 30-60 seconds...');
         
         const startTime = Date.now();
@@ -151,14 +151,14 @@ app.post('/api/timetable/generate', async (req, res) => {
         
         const generatedTimetable = response.data;
         
-        console.log(`[GATEWAY] ⬅️  Python service responded in ${generationTime.toFixed(2)}s`);
+        console.log(`[GATEWAY] <--  Python service responded in ${generationTime.toFixed(2)}s`);
         console.log(`[GATEWAY] 📊 Received ${generatedTimetable.length} scheduled slots`);
 
         // 5. Save timetable to database
         if (generatedTimetable.length > 0) {
             console.log('[GATEWAY] 💾 Saving generated timetable to database...');
             
-            // ✅ CRITICAL: Filter out slots with empty/invalid faculty IDs FIRST
+            // SUCCESS: CRITICAL: Filter out slots with empty/invalid faculty IDs FIRST
             const validSlots = generatedTimetable.filter(slot => 
                 slot.faculty_id && 
                 slot.faculty_id.trim() !== '' &&
@@ -190,7 +190,7 @@ app.post('/api/timetable/generate', async (req, res) => {
                     [facultyId, facultyId]  // Use ID as name if name not available
                 );
             }
-            console.log('[GATEWAY] ✅ All faculties ensured');
+            console.log('[GATEWAY] SUCCESS: All faculties ensured');
             
             // Delete old timetable for this section
             await connection.execute(
@@ -220,7 +220,7 @@ app.post('/api/timetable/generate', async (req, res) => {
             ]);
             
             await connection.query(insertQuery, [values]);
-            console.log('[GATEWAY] ✅ Timetable saved successfully');
+            console.log('[GATEWAY] SUCCESS: Timetable saved successfully');
             
             // 6. Fetch the saved timetable to return
             const [rows] = await connection.execute(
@@ -253,7 +253,7 @@ app.post('/api/timetable/generate', async (req, res) => {
 
     } catch (error) {
         console.error('\n' + '='.repeat(60));
-        console.error('[GATEWAY] ❌ ERROR OCCURRED');
+        console.error('[GATEWAY] ERROR: ERROR OCCURRED');
         console.error('='.repeat(60));
         
         if (error.response) {
@@ -262,7 +262,7 @@ app.post('/api/timetable/generate', async (req, res) => {
             console.error('  Status:', error.response.status);
             console.error('  Data:', error.response.data);
         } else if (error.code === 'ECONNREFUSED') {
-            console.error('[GATEWAY] ❌ Cannot connect to Python service');
+            console.error('[GATEWAY] ERROR: Cannot connect to Python service');
             console.error('[GATEWAY]    Make sure Python Flask API is running on port 5000');
         } else if (error.code) {
             // Database error
@@ -308,12 +308,12 @@ app.get('/api/timetables/available', async (req, res) => {
         
         const sectionIds = rows.map(row => row.section_id);
         
-        console.log(`[GATEWAY] ✅ Found ${sectionIds.length} timetables: ${sectionIds.join(', ')}`);
+        console.log(`[GATEWAY] SUCCESS: Found ${sectionIds.length} timetables: ${sectionIds.join(', ')}`);
         
         res.status(200).json(sectionIds);
         
     } catch (error) {
-        console.error('[GATEWAY] ❌ Error fetching available timetables:', error.message);
+        console.error('[GATEWAY] ERROR: Error fetching available timetables:', error.message);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch available timetables'
@@ -341,12 +341,12 @@ app.get('/api/timetable/:sectionId', async (req, res) => {
             [sectionId]
         );
         
-        console.log(`[GATEWAY] ✅ Fetched ${rows.length} slots for ${sectionId}`);
+        console.log(`[GATEWAY] SUCCESS: Fetched ${rows.length} slots for ${sectionId}`);
         
         res.status(200).json(rows);
         
     } catch (error) {
-        console.error(`[GATEWAY] ❌ Error fetching timetable for ${sectionId}:`, error.message);
+        console.error(`[GATEWAY] ERROR: Error fetching timetable for ${sectionId}:`, error.message);
         res.status(500).json({
             success: false,
             message: `Failed to fetch timetable for ${sectionId}`
@@ -359,35 +359,47 @@ app.get('/api/timetable/:sectionId', async (req, res) => {
 app.post('/api/exams/generate-seating', async (req, res) => {
     console.log('[GATEWAY] Received request to generate exam seating...');
     const { exam_date, exam_session } = req.body;
+
+    // DEBUG: Print what we're sending to Python service
+    console.log('[DEBUG] Request body received from frontend:');
+    console.log(`  exam_date = ${JSON.stringify(exam_date)} (type: ${typeof exam_date})`);
+    console.log(`  exam_session = ${JSON.stringify(exam_session)} (type: ${typeof exam_session})`);
+
     let connection;
     try {
         const examServiceUrl = 'http://127.0.0.1:5001/generate_seating';
-        console.log(`[GATEWAY] ➡ Calling Python exam service...`);
-        
-        const response = await axios.post(examServiceUrl, { exam_date, exam_session });
+        console.log(`[GATEWAY] --> Calling Python exam service...`);
+
+        const payload = { exam_date, exam_session };
+        console.log('[DEBUG] Payload being sent to Python:', JSON.stringify(payload));
+
+        const response = await axios.post(examServiceUrl, payload);
         const seatingPlan = response.data;
-        
-        console.log(`[GATEWAY] ⬅ Received seating plan for ${seatingPlan.length} students.`);
-        
-        // ▼▼▼ NEW: Save the seating plan to the database ▼▼▼
+
+        console.log(`[GATEWAY] Received seating plan for ${seatingPlan.length} students.`);
+        console.log('[DEBUG] Response type:', typeof seatingPlan, 'Is Array:', Array.isArray(seatingPlan));
+
+        // Save the seating plan to the database
         if (seatingPlan.length > 0) {
             connection = await mysql.createConnection(dbConfig);
-            console.log('[GATEWAY] 💾 Saving seating plan to the database...');
+            console.log('[GATEWAY] Saving seating plan to the database...');
 
             // 1. Get all unique subject codes from the generated plan
             const subjectCodes = [...new Set(seatingPlan.map(s => s.subject_code))];
 
             // 2. Find the corresponding exam IDs from the 'exams' table
+            const placeholders = subjectCodes.map(() => '?').join(',');
             const [examRows] = await connection.execute(
-                `SELECT id, subject_code FROM exams WHERE exam_date = ? AND exam_session = ? AND subject_code IN (?)`,
-                [exam_date, exam_session, subjectCodes]
+                `SELECT id, subject_code FROM exams WHERE exam_date = ? AND exam_session = ? AND subject_code IN (${placeholders})`,
+                [exam_date, exam_session, ...subjectCodes]
             );
             const examIdMap = new Map(examRows.map(e => [e.subject_code, e.id]));
             const examIdsToDelete = Array.from(examIdMap.values());
 
             // 3. Delete any old seating plan for these exams to avoid conflicts
             if (examIdsToDelete.length > 0) {
-                await connection.execute(`DELETE FROM exam_seating_plan WHERE exam_id IN (?)`, [examIdsToDelete]);
+                const deletePlaceholders = examIdsToDelete.map(() => '?').join(',');
+                await connection.execute(`DELETE FROM exam_seating_plan WHERE exam_id IN (${deletePlaceholders})`, examIdsToDelete);
                 console.log(`[GATEWAY] Cleared old seating plan for ${examIdsToDelete.length} exams.`);
             }
 
@@ -402,7 +414,7 @@ app.post('/api/exams/generate-seating', async (req, res) => {
 
             const insertQuery = `INSERT INTO exam_seating_plan (student_usn, exam_id, room_id, row_num, col_num) VALUES ?`;
             await connection.query(insertQuery, [valuesToInsert]);
-            console.log(`[GATEWAY] ✅ Successfully saved ${valuesToInsert.length} new seat assignments.`);
+            console.log(`[GATEWAY] Successfully saved ${valuesToInsert.length} new seat assignments.`);
         }
         
         res.status(200).json({
@@ -411,7 +423,7 @@ app.post('/api/exams/generate-seating', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[GATEWAY] ❌ Error in exam seating process:', error.response ? error.response.data : error.message);
+        console.error('[GATEWAY] ERROR: Error in exam seating process:', error.response ? error.response.data : error.message);
         res.status(500).json({ message: 'An error occurred during seating generation' });
     } finally {
         if (connection) connection.end();

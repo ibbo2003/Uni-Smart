@@ -1,5 +1,8 @@
 "use client";
 import { useState, useRef, useEffect, Fragment } from "react";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { RoleGuard } from "@/components/RoleGuard";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface SubjectInput {
   subject_code: string;
@@ -375,6 +378,7 @@ const TimetableGrid = ({ timetableData }: { timetableData: TimeSlot[] }) => {
 };
 
 export default function TimetablePage() {
+  const { user } = useAuth();
   const [semester, setSemester] = useState("");
   const [section, setSection] = useState("");
   const [classroom, setClassroom] = useState("");
@@ -585,22 +589,28 @@ export default function TimetablePage() {
   };
 
   return (
-    <main className="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="text-center mb-10">
-            <h1 className="text-4xl font-bold text-gray-800 tracking-tight mb-2">
-              🎓 Uni-Smart Timetable Generator
-            </h1>
-            <p className="text-gray-600 mb-2">
-              AI-Powered Intelligent Timetable Generation System
-            </p>
-            <div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 rounded-full px-4 py-1">
-              <span className="text-green-700 font-semibold text-sm">✅ v5.1</span>
-              <span className="text-green-600 text-xs">Enhanced VTU 2024 Compliance</span>
+    <ProtectedRoute allowedRoles={['ADMIN', 'FACULTY', 'STUDENT']}>
+      <main className="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="max-w-7xl mx-auto">
+            {/* Header */}
+            <div className="text-center mb-10">
+              <h1 className="text-4xl font-bold text-gray-800 tracking-tight mb-2">
+                🎓 Uni-Smart Timetable Generator
+              </h1>
+              <p className="text-gray-600 mb-2">
+                AI-Powered Intelligent Timetable Generation System
+              </p>
+              <div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 rounded-full px-4 py-1">
+                <span className="text-green-700 font-semibold text-sm">✅ v5.1</span>
+                <span className="text-green-600 text-xs">Enhanced VTU 2024 Compliance</span>
+              </div>
+              {user && (
+                <div className="mt-3 text-sm text-gray-600">
+                  Logged in as: <span className="font-semibold text-indigo-600">{user.role}</span>
+                </div>
+              )}
             </div>
-          </div>
 
           {/* Feature Highlights */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
@@ -678,14 +688,28 @@ export default function TimetablePage() {
             </div>
           </div>
 
-          {/* Generate New Timetable Form */}
-          <form
-            onSubmit={handleSubmit}
-            className="mt-10 bg-white p-8 rounded-lg shadow-md border border-gray-200 space-y-8"
+          {/* Generate New Timetable Form - Admin or Faculty Only */}
+          <RoleGuard
+            allowedRoles={['ADMIN', 'FACULTY']}
+            fallback={
+              <div className="mt-10 bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+                <p className="text-yellow-800 font-medium">
+                  Only administrators and faculty can generate timetables.
+                </p>
+                <p className="text-yellow-700 text-sm mt-2">
+                  You can view existing timetables above.
+                </p>
+              </div>
+            }
           >
-            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-              <span>⚡</span> Generate New Timetable
-            </h2>
+            <form
+              onSubmit={handleSubmit}
+              className="mt-10 bg-white p-8 rounded-lg shadow-md border border-gray-200 space-y-8"
+            >
+              <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                <span>⚡</span> Generate New Timetable
+                {user?.role === 'FACULTY' && <span className="text-sm text-indigo-600">(Faculty Access)</span>}
+              </h2>
 
             {/* Section Details */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -940,7 +964,8 @@ export default function TimetablePage() {
                 {isGenerating ? "⏳ Generating..." : "✨ Generate Timetable"}
               </button>
             </div>
-          </form>
+            </form>
+          </RoleGuard>
 
           {/* Display messages */}
           {message && (
@@ -1058,5 +1083,6 @@ export default function TimetablePage() {
         </div>
       </div>
     </main>
+    </ProtectedRoute>
   );
 }

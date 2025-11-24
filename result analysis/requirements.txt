@@ -8,6 +8,7 @@ djangorestframework-simplejwt==5.3.1
 
 # Database (PyMySQL is easier to install on Windows than mysqlclient)
 PyMySQL==1.1.1
+cryptography==44.0.0
 
 # CORS
 django-cors-headers==4.6.0
@@ -25,8 +26,8 @@ opencv-python==4.10.0.84
 easyocr==1.7.2
 Pillow==11.0.0
 numpy==2.2.0
-torch==2.5.1
-torchvision==0.20.1
+torch==2.9.1
+torchvision==0.24.1
 
 # Excel/CSV Export
 openpyxl==3.1.5

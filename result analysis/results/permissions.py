@@ -1,11 +1,19 @@
 """
-Custom Permission Classes for Role-Based Access Control
+Custom Permission Classes for Role-Based Access Control (RBAC)
 
-This module provides custom DRF permission classes to enforce
-role-based access control throughout the UniSmart application.
+This module implements comprehensive RBAC for the Uni-Smart Result Analysis system.
+Three roles: ADMIN, FACULTY, STUDENT
+
+Access patterns:
+- ADMIN: Full access to all data
+- FACULTY:
+  - As Class Advisor: Can access their advised class students
+  - As Subject Teacher: Can access subjects they teach
+- STUDENT: Can only access their own data
 """
 
 from rest_framework import permissions
+from results.models import Faculty, FacultySubjectAssignment
 
 
 class IsAdmin(permissions.BasePermission):
@@ -171,3 +179,113 @@ class IsSameUserOrAdmin(permissions.BasePermission):
 
         # User can access their own account
         return obj == request.user
+
+
+# ============================================================================
+# ENHANCED RBAC PERMISSIONS
+# ============================================================================
+
+class CanViewStudentResult(permissions.BasePermission):
+    """
+    Permission for viewing student results.
+    - ADMIN: All results
+    - FACULTY: Results from advised class + subjects taught
+    - STUDENT: Own results only
+    """
+
+    def has_permission(self, request, view):
+        return request.user.is_authenticated
+
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+        result = obj
+
+        if user.role == 'ADMIN':
+            return True
+
+        elif user.role == 'FACULTY':
+            try:
+                faculty = user.faculty_profile
+                # Check advised class
+                if faculty.class_advisor_section and result.student.section == faculty.class_advisor_section:
+                    return True
+                # Check subject taught
+                teaches_subject = FacultySubjectAssignment.objects.filter(
+                    faculty=faculty,
+                    subject=result.subject,
+                    is_active=True
+                ).exists()
+                return teaches_subject
+            except Faculty.DoesNotExist:
+                return False
+
+        elif user.role == 'STUDENT':
+            try:
+                return result.student.user == user
+            except:
+                return False
+
+        return False
+
+
+class CanGenerateTimetable(permissions.BasePermission):
+    """
+    Permission for generating timetables.
+    - ADMIN: Any class
+    - FACULTY: Only their advised class
+    - STUDENT: No
+    """
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+
+        if request.user.role == 'ADMIN':
+            return True
+
+        elif request.user.role == 'FACULTY':
+            try:
+                faculty = request.user.faculty_profile
+                return faculty.class_advisor_section is not None
+            except Faculty.DoesNotExist:
+                return False
+
+        return False
+
+
+class CanModifyTimetable(permissions.BasePermission):
+    """
+    Permission for modifying timetables.
+    - ADMIN: Yes
+    - FACULTY: No
+    - STUDENT: No
+    """
+
+    def has_permission(self, request, view):
+        if request.method in ['PUT', 'PATCH', 'DELETE']:
+            return request.user.is_authenticated and request.user.role == 'ADMIN'
+        return True
+
+
+class CanManageExamRegistration(permissions.BasePermission):
+    """
+    Permission for exam registrations.
+    - ADMIN: All registrations
+    - FACULTY: Own advised class students
+    - STUDENT: No
+    """
+
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role in ['ADMIN', 'FACULTY']
+
+
+class CanAssignSubjects(permissions.BasePermission):
+    """
+    Permission for assigning subjects to faculty.
+    - ADMIN: Yes
+    - FACULTY: No (cannot self-assign)
+    - STUDENT: No
+    """
+
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role == 'ADMIN'

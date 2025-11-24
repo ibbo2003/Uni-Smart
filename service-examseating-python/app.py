@@ -280,6 +280,103 @@ def get_exam_registrations(exam_id):
             cursor.close()
             conn.close()
 
+@app.route('/extract-students-from-pdf', methods=['POST'])
+def extract_students_from_pdf():
+    """Extract student data from uploaded PDF file"""
+    if 'file' not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No file selected"}), 400
+
+    if not file.filename.endswith('.pdf'):
+        return jsonify({"error": "File must be a PDF"}), 400
+
+    try:
+        import pdfplumber
+
+        students = []
+
+        # Read PDF with pdfplumber for better table extraction
+        with pdfplumber.open(file) as pdf:
+            for page in pdf.pages:
+                # Extract tables from the page
+                tables = page.extract_tables()
+
+                for table in tables:
+                    # Skip header row
+                    for row in table[1:]:  # Skip first row (headers)
+                        if row and len(row) >= 3:
+                            # Extract data from columns
+                            roll_no = row[0] if row[0] else ""
+                            usn = row[1] if row[1] else ""
+                            name = row[2] if row[2] else ""
+                            gender = row[3] if len(row) > 3 and row[3] else "Male"
+
+                            # Clean up the data
+                            usn = usn.strip() if usn else ""
+                            name = name.strip().upper() if name else ""
+                            gender = gender.strip() if gender else "Male"
+
+                            # Only add if USN is valid
+                            if usn and len(usn) >= 10:  # VTU USN format check
+                                students.append({
+                                    "usn": usn,
+                                    "name": name,
+                                    "gender": gender
+                                })
+
+        if not students:
+            return jsonify({"error": "No valid student data found in PDF"}), 400
+
+        return jsonify({
+            "message": f"Successfully extracted {len(students)} students",
+            "students": students,
+            "count": len(students)
+        }), 200
+
+    except Exception as e:
+        print(f"Error extracting PDF: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": f"Failed to extract data from PDF: {str(e)}"}), 500
+
+@app.route('/students/batch-create', methods=['POST'])
+def batch_create_students():
+    """Create multiple students from extracted PDF data"""
+    data = request.json
+    students = data.get('students', [])
+
+    if not students:
+        return jsonify({"error": "No student data provided"}), 400
+
+    conn = mysql.connector.connect(**db_config)
+    try:
+        cursor = conn.cursor()
+
+        # Prepare batch insert - using REPLACE to handle duplicates
+        values = [(s['usn'], s['name'], s.get('section_id', '7_A')) for s in students]
+        cursor.executemany(
+            "INSERT INTO students (usn, name, section_id) VALUES (%s, %s, %s) "
+            "ON DUPLICATE KEY UPDATE name = VALUES(name), section_id = VALUES(section_id)",
+            values
+        )
+        conn.commit()
+
+        return jsonify({
+            "message": f"Successfully created/updated {len(students)} students",
+            "count": len(students)
+        }), 201
+
+    except Exception as e:
+        print(f"Error in batch create: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
+
 # ================== SEATING PLAN ENDPOINTS ==================
 @app.route('/generate_seating', methods=['POST'])
 def generate_seating_plan():
@@ -289,16 +386,28 @@ def generate_seating_plan():
     exam_date = data['exam_date']
     exam_session = data['exam_session']
 
+    # DEBUG: Print received parameters
+    print('[DEBUG] Received parameters:')
+    print(f'  exam_date = {repr(exam_date)} (type: {type(exam_date).__name__})')
+    print(f'  exam_session = {repr(exam_session)} (type: {type(exam_session).__name__})')
+
     conn = mysql.connector.connect(**db_config)
     try:
         cursor = conn.cursor(dictionary=True)
 
-        print('[EXAM_SERVICE] 💾 Fetching data from database...')
+        print('[EXAM_SERVICE] Fetching data from database...')
 
         # 1. Fetch all available exam rooms
         cursor.execute("SELECT id, num_rows, num_cols FROM exam_rooms")
         rooms_data = cursor.fetchall()
         print(f"   - Found {len(rooms_data)} rooms.")
+
+        # DEBUG: Show what exams exist in database
+        cursor.execute("SELECT id, subject_code, exam_date, exam_session FROM exams")
+        all_exams = cursor.fetchall()
+        print(f'[DEBUG] Database contains {len(all_exams)} exams:')
+        for exam in all_exams:
+            print(f'  Exam ID {exam["id"]}: {exam["subject_code"]} on {exam["exam_date"]} {exam["exam_session"]}')
 
         # 2. Fetch all students registered for exams on the given date/session
         query = """
@@ -307,8 +416,13 @@ def generate_seating_plan():
             JOIN exams e ON r.exam_id = e.id
             WHERE e.exam_date = %s AND e.exam_session = %s
         """
+        print(f'[DEBUG] Executing query with date={repr(exam_date)}, session={repr(exam_session)}')
         cursor.execute(query, (exam_date, exam_session))
         registrations = cursor.fetchall()
+
+        print(f'[DEBUG] Query returned {len(registrations)} registrations')
+        if len(registrations) > 0:
+            print(f'[DEBUG] First 3 registrations: {registrations[:3]}')
 
         # Group students by subject
         students_by_subject = {}
@@ -321,14 +435,14 @@ def generate_seating_plan():
         print(f"   - Found {len(registrations)} student registrations across {len(students_by_subject)} subjects.")
 
         # 3. Run the seating algorithm
-        print('[EXAM_SERVICE] ⚙️ Starting seating arrangement algorithm...')
+        print('[EXAM_SERVICE] Starting seating arrangement algorithm...')
         seating_plan = arrange_seats(rooms_data, students_by_subject)
 
-        print('[EXAM_SERVICE] ➡ Sending response back to the gateway...')
+        print('[EXAM_SERVICE] Sending response back to the gateway...')
         return jsonify(seating_plan)
 
     except Exception as e:
-        print(f"[EXAM_SERVICE] ❌ An error occurred:")
+        print(f"[EXAM_SERVICE] ERROR: An error occurred:")
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
     finally:

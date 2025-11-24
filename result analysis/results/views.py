@@ -34,7 +34,8 @@ from .serializers import (
 from .permissions import (
     IsAdmin, IsFaculty, IsStudent, IsAdminOrFaculty,
     IsOwnerOrAdminOrFaculty, IsAdminOrReadOnly,
-    CanAccessScraper, CanViewAnalytics, IsSameUserOrAdmin
+    CanAccessScraper, CanViewAnalytics, IsSameUserOrAdmin,
+    CanViewStudentResult, CanAssignSubjects
 )
 from .scraper_service import scrape_single_usn, scrape_batch_usns
 
@@ -96,6 +97,196 @@ class UserViewSet(viewsets.ModelViewSet):
         user.save()
 
         return Response({'message': 'Password changed successfully.'}, status=status.HTTP_200_OK)
+
+
+# ============================================================================
+# AUTHENTICATION ENDPOINTS
+# ============================================================================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register_user(request):
+    """
+    Register a new user (Student or Faculty).
+
+    Expected payload:
+    {
+        "email": "2ab22cs001@anjuman.edu.in" or "john.smith@anjuman.edu.in",
+        "password": "securepassword",
+        "role": "STUDENT" or "FACULTY",
+        "name": "Full Name",
+        "usn": "2AB22CS001" (for students only),
+        "department_code": "CS",
+        "current_semester": 6 (for students only),
+        "batch": "2022" (for students only),
+        "designation": "Professor" (for faculty only),
+        "employee_id": "CS-F-001" (optional for faculty, auto-generated if not provided)
+    }
+    """
+    from .models import Department, validate_student_email, validate_faculty_email
+    from django.core.exceptions import ValidationError as DjangoValidationError
+
+    try:
+        # Extract and validate required fields
+        email = request.data.get('email', '').lower().strip()
+        password = request.data.get('password')
+        role = request.data.get('role', '').upper()
+        name = request.data.get('name', '').strip()
+        department_code = request.data.get('department_code', '').upper().strip()
+
+        # Validation
+        if not all([email, password, role, name, department_code]):
+            return Response(
+                {'error': 'Email, password, role, name, and department_code are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if role not in ['STUDENT', 'FACULTY']:
+            return Response(
+                {'error': 'Role must be STUDENT or FACULTY'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate email format based on role
+        try:
+            if role == 'STUDENT':
+                validate_student_email(email)
+            else:
+                validate_faculty_email(email)
+        except DjangoValidationError as e:
+            return Response(
+                {'error': str(e.message)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check if user already exists
+        if User.objects.filter(email=email).exists():
+            return Response(
+                {'error': 'User with this email already exists'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get department
+        try:
+            department = Department.objects.get(code=department_code)
+        except Department.DoesNotExist:
+            return Response(
+                {'error': f'Department with code {department_code} not found'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Create User
+        if role == 'STUDENT':
+            usn = request.data.get('usn', '').upper().strip()
+            if not usn:
+                return Response(
+                    {'error': 'USN is required for students'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Check if USN already exists
+            if Student.objects.filter(usn=usn).exists():
+                return Response(
+                    {'error': 'Student with this USN already exists'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            username = usn.lower()  # Use USN as username for students
+        else:
+            # For faculty, use employee_id or generate it
+            employee_id = request.data.get('employee_id')
+            if not employee_id:
+                employee_id = Faculty.generate_next_faculty_id(department_code)
+
+            username = employee_id  # Use employee_id as username for faculty
+
+        # Create user
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password,
+            role=role,
+            first_name=name.split()[0] if name else '',
+            last_name=' '.join(name.split()[1:]) if len(name.split()) > 1 else ''
+        )
+
+        # Create role-specific profile
+        if role == 'STUDENT':
+            current_semester = request.data.get('current_semester', 1)
+            batch = request.data.get('batch', '')
+
+            if not batch:
+                return Response(
+                    {'error': 'Batch is required for students'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            student = Student.objects.create(
+                user=user,
+                usn=usn,
+                name=name,
+                department=department,
+                current_semester=current_semester,
+                batch=batch,
+                admission_year=int(batch),
+                email=email
+            )
+
+            return Response({
+                'message': 'Student registered successfully',
+                'user': {
+                    'id': str(user.id),
+                    'username': user.username,
+                    'email': user.email,
+                    'role': user.role,
+                    'student_usn': student.usn
+                }
+            }, status=status.HTTP_201_CREATED)
+
+        else:  # FACULTY
+            designation = request.data.get('designation', '')
+            if not designation:
+                return Response(
+                    {'error': 'Designation is required for faculty'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            employee_id = request.data.get('employee_id')
+            if not employee_id:
+                employee_id = Faculty.generate_next_faculty_id(department_code)
+
+            # Check if employee_id already exists
+            if Faculty.objects.filter(employee_id=employee_id).exists():
+                return Response(
+                    {'error': 'Faculty with this employee ID already exists'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            faculty = Faculty.objects.create(
+                user=user,
+                employee_id=employee_id,
+                name=name,
+                department=department,
+                designation=designation,
+                email=email
+            )
+
+            return Response({
+                'message': 'Faculty registered successfully',
+                'user': {
+                    'id': str(user.id),
+                    'username': user.username,
+                    'email': user.email,
+                    'role': user.role,
+                    'employee_id': faculty.employee_id
+                }
+            }, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        return Response(
+            {'error': f'Registration failed: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 # ============================================================================
@@ -235,33 +426,52 @@ class SubjectViewSet(viewsets.ModelViewSet):
 
 class StudentViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for Student management.
-    Students can only view their own data.
-    Faculty can view students in their department.
-    Admin can view all students.
+    ViewSet for Student management with RBAC.
+    - ADMIN: View all students
+    - FACULTY: View students in their advised section (if class advisor) OR department
+    - STUDENT: View only their own data
     """
 
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['department', 'current_semester', 'batch', 'is_active']
+    filterset_fields = ['department', 'current_semester', 'batch', 'is_active', 'section']
     search_fields = ['usn', 'name', 'email']
     ordering_fields = ['usn', 'name', 'batch']
     ordering = ['usn']
 
     def get_queryset(self):
-        """Filter queryset based on user role."""
+        """
+        Filter queryset based on user role with enhanced RBAC.
+        - ADMIN: All students
+        - FACULTY: Students in advised section (priority) OR entire department
+        - STUDENT: Own data only
+        """
         user = self.request.user
 
         if user.role == 'ADMIN':
             return Student.objects.all()
+
         elif user.role == 'FACULTY':
             try:
                 faculty = user.faculty_profile
-                return Student.objects.filter(department=faculty.department)
-            except:
+
+                # If faculty is a class advisor, prioritize advised section
+                if faculty.class_advisor_section:
+                    return Student.objects.filter(
+                        section=faculty.class_advisor_section,
+                        is_active=True
+                    )
+
+                # Otherwise, show all students in faculty's department
+                return Student.objects.filter(
+                    department=faculty.department,
+                    is_active=True
+                )
+            except Faculty.DoesNotExist:
                 return Student.objects.none()
+
         elif user.role == 'STUDENT':
             try:
                 return Student.objects.filter(id=user.student_profile.id)
@@ -408,18 +618,76 @@ class FacultyViewSet(viewsets.ModelViewSet):
 
 
 # ============================================================================
+# FACULTY SUBJECT ASSIGNMENT VIEWSET
+# ============================================================================
+
+class FacultySubjectAssignmentViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for FacultySubjectAssignment management with RBAC.
+    - ADMIN: Can create, view, update, delete assignments
+    - FACULTY: Can only view their own assignments
+    - STUDENT: Can view assignments (read-only)
+    """
+
+    queryset = FacultySubjectAssignment.objects.all()
+    serializer_class = FacultySubjectAssignmentSerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['faculty', 'subject', 'semester', 'academic_year', 'is_active']
+    search_fields = ['faculty__name', 'subject__code', 'subject__name']
+    ordering_fields = ['semester', 'academic_year']
+    ordering = ['-academic_year', 'semester']
+
+    def get_permissions(self):
+        """
+        Set permissions based on action.
+        - create, update, partial_update, destroy: Admin only (CanAssignSubjects)
+        - list, retrieve: Authenticated users
+        """
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [CanAssignSubjects()]
+        return [IsAuthenticated()]
+
+    def get_queryset(self):
+        """
+        Filter queryset based on user role.
+        - ADMIN: All assignments
+        - FACULTY: Only their own assignments
+        - STUDENT: All active assignments (for viewing who teaches what)
+        """
+        user = self.request.user
+
+        if user.role == 'ADMIN':
+            return FacultySubjectAssignment.objects.all()
+
+        elif user.role == 'FACULTY':
+            try:
+                faculty = user.faculty_profile
+                return FacultySubjectAssignment.objects.filter(faculty=faculty)
+            except Faculty.DoesNotExist:
+                return FacultySubjectAssignment.objects.none()
+
+        elif user.role == 'STUDENT':
+            # Students can see all active assignments to know who teaches what
+            return FacultySubjectAssignment.objects.filter(is_active=True)
+
+        return FacultySubjectAssignment.objects.none()
+
+
+# ============================================================================
 # STUDENT RESULT VIEWSET
 # ============================================================================
 
 class StudentResultViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for StudentResult management.
-    Results are filtered based on user role.
+    ViewSet for StudentResult management with enhanced RBAC.
+    - ADMIN: All results
+    - FACULTY: Results from advised class + subjects they teach
+    - STUDENT: Own results only
     """
 
     queryset = StudentResult.objects.all()
     serializer_class = StudentResultSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanViewStudentResult]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['student', 'subject', 'semester', 'result_status', 'is_latest']
     search_fields = ['student__usn', 'student__name', 'subject__code', 'subject__name']
@@ -427,17 +695,48 @@ class StudentResultViewSet(viewsets.ModelViewSet):
     ordering = ['-announced_date']
 
     def get_queryset(self):
-        """Filter queryset based on user role."""
+        """
+        Filter queryset based on user role with enhanced RBAC.
+        - ADMIN: All results
+        - FACULTY: Results from advised class students + subjects they teach
+        - STUDENT: Own results only
+        """
         user = self.request.user
 
         if user.role == 'ADMIN':
             return StudentResult.objects.all()
+
         elif user.role == 'FACULTY':
             try:
                 faculty = user.faculty_profile
-                return StudentResult.objects.filter(student__department=faculty.department)
-            except:
+
+                # Start with empty queryset
+                results = StudentResult.objects.none()
+
+                # Add results from advised class
+                if faculty.class_advisor_section:
+                    class_results = StudentResult.objects.filter(
+                        student__section=faculty.class_advisor_section
+                    )
+                    results = results | class_results
+
+                # Add results from subjects they teach
+                subject_assignments = FacultySubjectAssignment.objects.filter(
+                    faculty=faculty,
+                    is_active=True
+                ).values_list('subject_id', flat=True)
+
+                if subject_assignments:
+                    subject_results = StudentResult.objects.filter(
+                        subject__id__in=subject_assignments
+                    )
+                    results = results | subject_results
+
+                return results.distinct()
+
+            except Faculty.DoesNotExist:
                 return StudentResult.objects.none()
+
         elif user.role == 'STUDENT':
             try:
                 return StudentResult.objects.filter(student=user.student_profile)
@@ -558,33 +857,64 @@ class AnalyticsViewSet(viewsets.ViewSet):
             stats['avg_cgpa'] = float(cgpa_sum / students.count()) if students.count() > 0 else 0
 
         elif user.role == 'FACULTY':
-            # Faculty sees department statistics
+            # Faculty sees statistics based on their role
             try:
                 faculty = user.faculty_profile
                 department = faculty.department
 
-                students = Student.objects.filter(department=department, is_active=True)
+                # If class advisor, show advised class statistics
+                if faculty.class_advisor_section:
+                    students = Student.objects.filter(
+                        section=faculty.class_advisor_section,
+                        is_active=True
+                    )
 
-                stats = {
-                    'department': department.name,
-                    'total_students': students.count(),
-                    'total_subjects': Subject.objects.filter(department=department, is_active=True).count(),
-                    'total_results': StudentResult.objects.filter(
-                        student__department=department,
-                        is_latest=True
-                    ).count(),
-                    'avg_cgpa': 0,
-                    'total_backlogs': StudentResult.objects.filter(
-                        student__department=department,
-                        is_latest=True,
-                        result_status='F'
-                    ).count()
-                }
+                    stats = {
+                        'role': 'Class Advisor',
+                        'section': faculty.class_advisor_section,
+                        'department': department.name,
+                        'total_students': students.count(),
+                        'total_subjects': Subject.objects.filter(department=department, is_active=True).count(),
+                        'total_results': StudentResult.objects.filter(
+                            student__section=faculty.class_advisor_section,
+                            is_latest=True
+                        ).count(),
+                        'avg_cgpa': 0,
+                        'total_backlogs': StudentResult.objects.filter(
+                            student__section=faculty.class_advisor_section,
+                            is_latest=True,
+                            result_status='F'
+                        ).count()
+                    }
 
-                cgpa_sum = sum([student.calculate_cgpa() for student in students])
-                stats['avg_cgpa'] = float(cgpa_sum / students.count()) if students.count() > 0 else 0
+                    cgpa_sum = sum([student.calculate_cgpa() for student in students])
+                    stats['avg_cgpa'] = float(cgpa_sum / students.count()) if students.count() > 0 else 0
 
-            except:
+                else:
+                    # Otherwise, show department statistics
+                    students = Student.objects.filter(department=department, is_active=True)
+
+                    stats = {
+                        'role': 'Subject Teacher',
+                        'department': department.name,
+                        'total_students': students.count(),
+                        'total_subjects': Subject.objects.filter(department=department, is_active=True).count(),
+                        'total_results': StudentResult.objects.filter(
+                            student__department=department,
+                            is_latest=True
+                        ).count(),
+                        'avg_cgpa': 0,
+                        'total_backlogs': StudentResult.objects.filter(
+                            student__department=department,
+                            is_latest=True,
+                            result_status='F'
+                        ).count()
+                    }
+
+                    cgpa_sum = sum([student.calculate_cgpa() for student in students])
+                    stats['avg_cgpa'] = float(cgpa_sum / students.count()) if students.count() > 0 else 0
+
+            except Faculty.DoesNotExist:
                 stats = {}
 
         elif user.role == 'STUDENT':

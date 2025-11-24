@@ -1,71 +1,53 @@
 # ===================================================================
-# Secrets - THIS IS THE MOST IMPORTANT PART FOR SECURITY
+# SECURITY - Environment Variables & Secrets
 # ===================================================================
-# Ignore environment variables files which contain passwords and secrets
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.cert
 
 # ===================================================================
 # Node.js / npm / Next.js
 # ===================================================================
-# Dependencies installed by npm or yarn
 node_modules/
-
-# Next.js build output
 .next/
 out/
-
-# Log files
+.turbo/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+.npm
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
 
 # ===================================================================
-# Python / pip
+# Python / Django / Flask
 # ===================================================================
-# Virtual environment folder
+# Virtual environments
 venv/
 .venv/
 env/
-.env/
+ENV/
+env.bak/
+venv.bak/
 
-# Python cache files
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Distribution / packaging
-dist/
-build/
-*.egg-info/
-
-# ===================================================================
-# General / Operating System / Editor Files
-# ===================================================================
-# macOS
-.DS_Store
-
-# Windows
-Thumbs.db
-
-# VS Code editor folder
-.vscode/
-
-# Other editor/IDE folders
-.idea/
-
-#result scraper
-# Python
+# Python cache
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+
+# Distribution / packaging
+dist/
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -78,8 +60,9 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
-# Django
+# Django specific
 *.log
 local_settings.py
 db.sqlite3
@@ -87,52 +70,137 @@ db.sqlite3-journal
 /media
 /staticfiles
 /static
+migrations/__pycache__/
 
-# Environment
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+# Flask cache
+instance/
+.webassets-cache
 
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-
-# Logs
-logs/
-*.log
-
-# Database
+# ===================================================================
+# Database Files
+# ===================================================================
 *.sql
 *.sqlite
+*.sqlite3
 *.db
+!uni-smart_db.sql
+!sample_data.sql
 
-# Selenium
-chromedriver
-geckodriver
-*.exe
+# ===================================================================
+# Logs
+# ===================================================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+lerna-debug.log*
+pnpm-debug.log*
 
-# OS
-Thumbs.db
-.DS_Store
-
-# Coverage
-htmlcov/
+# ===================================================================
+# Testing & Coverage
+# ===================================================================
+.pytest_cache/
 .coverage
 .coverage.*
 coverage.xml
+htmlcov/
 *.cover
+.hypothesis/
+.tox/
+nosetests.xml
 
-# pytest
-.pytest_cache/
+# ===================================================================
+# Web Scraping / Selenium
+# ===================================================================
+chromedriver
+chromedriver.exe
+geckodriver
+geckodriver.exe
+*.crx
+selenium-debug.log
 
-# Migrations (optional - uncomment if you want to ignore)
+# ===================================================================
+# IDEs & Editors
+# ===================================================================
+# VS Code
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs (PyCharm, WebStorm, etc.)
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ===================================================================
+# Operating System Files
+# ===================================================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# ===================================================================
+# Temporary Files
+# ===================================================================
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~.nib
+
+# ===================================================================
+# Build Artifacts
+# ===================================================================
+*.tar.gz
+*.zip
+*.rar
+
+# ===================================================================
+# Docker (optional - comment out if you want to track volumes)
+# ===================================================================
+# docker-compose.override.yml
+# .dockerignore
+
+# ===================================================================
+# Documentation Build (if using Sphinx or similar)
+# ===================================================================
+docs/_build/
+site/
+
+# ===================================================================
+# Optional: Uncomment if needed
+# ===================================================================
+# Django migrations (if you want to regenerate them)
 # */migrations/*.py
 # !*/migrations/__init__.py
+
+# Jupyter Notebooks
+# .ipynb_checkpoints/
+# *.ipynb
+
+# Package lock files (if using different package managers)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml

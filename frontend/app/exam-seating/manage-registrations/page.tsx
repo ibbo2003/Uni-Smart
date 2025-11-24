@@ -2,13 +2,19 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { UserGroupIcon, PlusIcon, TrashIcon, ArrowLeftIcon, DocumentArrowUpIcon } from '@heroicons/react/24/outline';
+import { UserGroupIcon, PlusIcon, TrashIcon, ArrowLeftIcon, DocumentArrowUpIcon, CloudArrowUpIcon } from '@heroicons/react/24/outline';
 
 interface Student {
   registration_id: number;
   student_usn: string;
   name: string;
   section_id: string;
+}
+
+interface ExtractedStudent {
+  usn: string;
+  name: string;
+  gender: string;
 }
 
 export default function ManageRegistrationsPage() {
@@ -26,6 +32,13 @@ export default function ManageRegistrationsPage() {
   // Form state
   const [singleUSN, setSingleUSN] = useState('');
   const [batchUSNs, setBatchUSNs] = useState('');
+
+  // PDF upload state
+  const [showPdfUpload, setShowPdfUpload] = useState(false);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [extractedStudents, setExtractedStudents] = useState<ExtractedStudent[]>([]);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [isCreatingStudents, setIsCreatingStudents] = useState(false);
 
   useEffect(() => {
     if (examId) {
@@ -123,6 +136,100 @@ export default function ManageRegistrationsPage() {
       setBatchUSNs('');
     } catch (error: any) {
       showMessage(error.message, 'error');
+    }
+  };
+
+  const handlePdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type === 'application/pdf') {
+      setPdfFile(file);
+    } else {
+      showMessage('Please select a valid PDF file', 'error');
+    }
+  };
+
+  const extractStudentsFromPdf = async () => {
+    if (!pdfFile) {
+      showMessage('Please select a PDF file first', 'error');
+      return;
+    }
+
+    setIsExtracting(true);
+    const formData = new FormData();
+    formData.append('file', pdfFile);
+
+    try {
+      const response = await fetch('http://localhost:5001/extract-students-from-pdf', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to extract students from PDF');
+      }
+
+      const result = await response.json();
+      setExtractedStudents(result.students);
+      showMessage(`Successfully extracted ${result.count} students from PDF!`, 'success');
+    } catch (error: any) {
+      showMessage(error.message, 'error');
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
+  const createStudentsAndRegister = async () => {
+    if (extractedStudents.length === 0) {
+      showMessage('No students to register', 'error');
+      return;
+    }
+
+    setIsCreatingStudents(true);
+
+    try {
+      // Step 1: Create students in database
+      const createResponse = await fetch('http://localhost:5001/students/batch-create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ students: extractedStudents })
+      });
+
+      if (!createResponse.ok) {
+        const error = await createResponse.json();
+        throw new Error(error.error || 'Failed to create students');
+      }
+
+      // Step 2: Register students for exam
+      const usnList = extractedStudents.map(s => s.usn);
+      const registerResponse = await fetch('http://localhost:5001/registrations/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          exam_id: parseInt(examId!),
+          student_usns: usnList
+        })
+      });
+
+      if (!registerResponse.ok) {
+        const error = await registerResponse.json();
+        throw new Error(error.error || 'Failed to register students');
+      }
+
+      const result = await registerResponse.json();
+      showMessage(`Successfully created and registered ${result.registered_count} students!`, 'success');
+
+      // Reset state
+      setPdfFile(null);
+      setExtractedStudents([]);
+      setShowPdfUpload(false);
+      setShowBatchModal(false);
+      fetchRegistrations();
+
+    } catch (error: any) {
+      showMessage(error.message, 'error');
+    } finally {
+      setIsCreatingStudents(false);
     }
   };
 
@@ -313,51 +420,176 @@ export default function ManageRegistrationsPage() {
 
       {/* Batch Registration Modal */}
       {showBatchModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full p-6 my-8">
             <h2 className="text-2xl font-bold mb-6">Batch Register Students</h2>
 
-            <form onSubmit={handleBatchRegistration} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Student USNs (one per line or comma-separated)
-                </label>
-                <textarea
-                  value={batchUSNs}
-                  onChange={(e) => setBatchUSNs(e.target.value)}
-                  required
-                  rows={10}
-                  placeholder="1MS21CS001&#10;1MS21CS002&#10;1MS21CS003&#10;or&#10;1MS21CS001, 1MS21CS002, 1MS21CS003"
-                  className="w-full p-3 border rounded-md focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                />
-              </div>
+            {/* Method Selection Tabs */}
+            <div className="flex border-b mb-6">
+              <button
+                onClick={() => setShowPdfUpload(false)}
+                className={`px-6 py-3 font-medium ${!showPdfUpload ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                Manual Entry
+              </button>
+              <button
+                onClick={() => setShowPdfUpload(true)}
+                className={`px-6 py-3 font-medium flex items-center ${showPdfUpload ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                <CloudArrowUpIcon className="h-5 w-5 mr-2" />
+                Upload PDF
+              </button>
+            </div>
 
-              <div className="bg-green-50 p-3 rounded-md">
-                <p className="text-sm text-gray-700">
-                  <strong>Tip:</strong> You can paste a list of USNs separated by commas or new lines.
-                  The system will automatically filter and register only valid students.
-                </p>
-              </div>
+            {!showPdfUpload ? (
+              /* Manual Entry Form */
+              <form onSubmit={handleBatchRegistration} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Student USNs (one per line or comma-separated)
+                  </label>
+                  <textarea
+                    value={batchUSNs}
+                    onChange={(e) => setBatchUSNs(e.target.value)}
+                    required
+                    rows={10}
+                    placeholder="1MS21CS001&#10;1MS21CS002&#10;1MS21CS003&#10;or&#10;1MS21CS001, 1MS21CS002, 1MS21CS003"
+                    className="w-full p-3 border rounded-md focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                  />
+                </div>
 
-              <div className="flex space-x-3 pt-4">
+                <div className="bg-green-50 p-3 rounded-md">
+                  <p className="text-sm text-gray-700">
+                    <strong>Tip:</strong> You can paste a list of USNs separated by commas or new lines.
+                    The system will automatically filter and register only valid students.
+                  </p>
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowBatchModal(false);
+                      setBatchUSNs('');
+                    }}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                  >
+                    Register All Students
+                  </button>
+                </div>
+              </form>
+            ) : (
+              /* PDF Upload Form */
+              <div className="space-y-6">
+                {/* File Upload */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Upload Student List PDF
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition-colors">
+                    <CloudArrowUpIcon className="h-12 w-12 mx-auto text-gray-400 mb-3" />
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={handlePdfUpload}
+                      className="hidden"
+                      id="pdf-upload"
+                    />
+                    <label htmlFor="pdf-upload" className="cursor-pointer">
+                      <span className="text-blue-600 hover:text-blue-700 font-medium">
+                        Choose a PDF file
+                      </span>
+                      <span className="text-gray-500"> or drag and drop</span>
+                    </label>
+                    {pdfFile && (
+                      <p className="mt-2 text-sm text-gray-600">
+                        Selected: {pdfFile.name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Extract Button */}
                 <button
-                  type="button"
-                  onClick={() => {
-                    setShowBatchModal(false);
-                    setBatchUSNs('');
-                  }}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+                  onClick={extractStudentsFromPdf}
+                  disabled={!pdfFile || isExtracting}
+                  className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
                 >
-                  Cancel
+                  {isExtracting ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Extracting...
+                    </>
+                  ) : (
+                    'Extract Students from PDF'
+                  )}
                 </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                >
-                  Register All Students
-                </button>
+
+                {/* Extracted Students Preview */}
+                {extractedStudents.length > 0 && (
+                  <div className="border rounded-lg p-4 bg-gray-50 max-h-96 overflow-y-auto">
+                    <h3 className="font-semibold mb-3">Extracted Students ({extractedStudents.length})</h3>
+                    <div className="space-y-2">
+                      {extractedStudents.map((student, index) => (
+                        <div key={index} className="bg-white p-3 rounded border text-sm">
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <span className="font-medium">USN:</span> {student.usn}
+                            </div>
+                            <div>
+                              <span className="font-medium">Name:</span> {student.name}
+                            </div>
+                            <div>
+                              <span className="font-medium">Gender:</span> {student.gender}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowBatchModal(false);
+                      setPdfFile(null);
+                      setExtractedStudents([]);
+                      setShowPdfUpload(false);
+                    }}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={createStudentsAndRegister}
+                    disabled={extractedStudents.length === 0 || isCreatingStudents}
+                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {isCreatingStudents ? 'Processing...' : `Create & Register ${extractedStudents.length} Students`}
+                  </button>
+                </div>
+
+                {/* Info Box */}
+                <div className="bg-blue-50 p-4 rounded-md">
+                  <p className="text-sm text-gray-700">
+                    <strong>Format Expected:</strong> PDF should contain a table with columns: Roll No, USN, Name, Gender.
+                    The system will automatically extract and validate student data.
+                  </p>
+                </div>
               </div>
-            </form>
+            )}
           </div>
         </div>
       )}

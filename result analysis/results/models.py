@@ -12,10 +12,40 @@ from typing import Optional, List
 
 from django.db import models
 from django.contrib.auth.models import AbstractUser
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
 from django.core.exceptions import ValidationError
 from django.db.models import Q, Avg, Sum, Count
 from django.utils import timezone
+import re
+
+
+# ============================================================================
+# EMAIL VALIDATORS
+# ============================================================================
+
+def validate_student_email(email):
+    """
+    Validate student email format: 2ab______@anjuman.edu.in
+    Format: 2ab + year(2 digits) + branch(2 letters) + roll(3 digits) @anjuman.edu.in
+    Example: 2ab22cs001@anjuman.edu.in
+    """
+    pattern = r'^2ab\d{2}[a-z]{2}\d{3}@anjuman\.edu\.in$'
+    if not re.match(pattern, email.lower()):
+        raise ValidationError(
+            'Student email must be in format: 2abYYBBRRR@anjuman.edu.in '
+            '(YY=year, BB=branch, RRR=roll number). Example: 2ab22cs001@anjuman.edu.in'
+        )
+
+def validate_faculty_email(email):
+    """
+    Validate faculty email format: ______@anjuman.edu.in
+    Faculty can have any username before @anjuman.edu.in
+    """
+    pattern = r'^[a-z0-9._-]+@anjuman\.edu\.in$'
+    if not re.match(pattern, email.lower()):
+        raise ValidationError(
+            'Faculty email must be in format: username@anjuman.edu.in'
+        )
 
 
 # ============================================================================
@@ -175,7 +205,7 @@ class Subject(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'subjects'
+        db_table = 'results_subjects'
         indexes = [
             models.Index(fields=['code', 'is_active']),
             models.Index(fields=['department', 'is_active']),
@@ -270,7 +300,7 @@ class SemesterSubject(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'semester_subjects'
+        db_table = 'results_semester_subjects'
         unique_together = [['subject', 'department', 'semester', 'academic_year']]
         indexes = [
             models.Index(fields=['department', 'semester', 'academic_year']),
@@ -303,15 +333,24 @@ class Student(models.Model):
     )
     batch = models.CharField(max_length=10, help_text="Admission year batch (e.g., 2022)")
     admission_year = models.IntegerField()
+
+    # Section field - links to section in timetable service
+    section = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Section ID (from timetable service sections table)"
+    )
+
     date_of_birth = models.DateField(null=True, blank=True)
-    email = models.EmailField(unique=True)
+    email = models.EmailField(unique=True, validators=[validate_student_email])
     phone = models.CharField(max_length=15, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'students'
+        db_table = 'results_students'
         indexes = [
             models.Index(fields=['usn']),
             models.Index(fields=['department', 'current_semester']),
@@ -426,6 +465,9 @@ class Student(models.Model):
 class Faculty(models.Model):
     """
     Represents faculty/teacher profile.
+    Faculty can have two roles:
+    1. Class Advisor - responsible for a specific section
+    2. Subject Teacher - teaches specific subjects (via FacultySubjectAssignment)
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -434,14 +476,23 @@ class Faculty(models.Model):
     name = models.CharField(max_length=200)
     department = models.ForeignKey(Department, on_delete=models.PROTECT, related_name='faculty_members')
     designation = models.CharField(max_length=100, help_text="e.g., Professor, Assistant Professor")
-    email = models.EmailField(unique=True)
+    email = models.EmailField(unique=True, validators=[validate_faculty_email])
     phone = models.CharField(max_length=15, blank=True)
+
+    # Class Advisor field - links to section in timetable service
+    class_advisor_section = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Section ID this faculty advises (from timetable service sections table)"
+    )
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'faculty'
+        db_table = 'results_faculty'
         indexes = [
             models.Index(fields=['employee_id']),
             models.Index(fields=['department', 'is_active']),
@@ -452,6 +503,46 @@ class Faculty(models.Model):
 
     def __str__(self):
         return f"{self.employee_id} - {self.name}"
+
+    @staticmethod
+    def generate_next_faculty_id(department_code):
+        """
+        Generate next sequential faculty ID for a department.
+        Format: DEPT-F-XXX (e.g., CS-F-001, CS-F-002)
+
+        IDs are permanent once assigned and are NOT reassigned when new faculty joins.
+        New faculty simply gets the next available sequential number.
+
+        Args:
+            department_code: Department code (e.g., 'CS', 'EC', 'ME')
+
+        Returns:
+            str: Next faculty ID in format DEPT-F-XXX
+
+        Example:
+            >>> Faculty.generate_next_faculty_id('CS')
+            'CS-F-001'  # If no faculty exists
+            >>> Faculty.generate_next_faculty_id('CS')
+            'CS-F-003'  # If CS-F-002 was the last ID
+        """
+        # Find the last faculty ID in this department
+        last_faculty = Faculty.objects.filter(
+            employee_id__startswith=f"{department_code}-F-"
+        ).order_by('-employee_id').first()
+
+        if last_faculty:
+            # Extract number from "CS-F-005" → 5
+            try:
+                last_number = int(last_faculty.employee_id.split('-')[-1])
+                new_number = last_number + 1
+            except (ValueError, IndexError):
+                # Fallback if ID format is unexpected
+                new_number = 1
+        else:
+            # First faculty in department
+            new_number = 1
+
+        return f"{department_code}-F-{new_number:03d}"
 
 
 # ============================================================================
@@ -473,7 +564,7 @@ class FacultySubjectAssignment(models.Model):
     assigned_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'faculty_subject_assignments'
+        db_table = 'results_faculty_subject_assignments'
         unique_together = [['faculty', 'subject', 'semester', 'academic_year', 'section']]
         indexes = [
             models.Index(fields=['faculty', 'academic_year']),
@@ -514,7 +605,7 @@ class ExamSchedule(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'exam_schedules'
+        db_table = 'results_exam_schedules'
         indexes = [
             models.Index(fields=['semester', 'academic_year']),
             models.Index(fields=['-start_date']),
@@ -607,7 +698,7 @@ class StudentResult(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'student_results'
+        db_table = 'results_student_results'
         unique_together = [['student', 'subject', 'semester', 'attempt_number']]
         indexes = [
             models.Index(fields=['student', 'semester', 'is_latest']),
@@ -884,7 +975,7 @@ class ScrapeLog(models.Model):
     scraped_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'scrape_logs'
+        db_table = 'results_scrape_logs'
         indexes = [
             models.Index(fields=['usn', '-scraped_at']),
             models.Index(fields=['status', '-scraped_at']),
@@ -981,7 +1072,7 @@ class SystemSettings(models.Model):
     )
 
     class Meta:
-        db_table = 'system_settings'
+        db_table = 'results_system_settings'
         indexes = [
             models.Index(fields=['key']),
         ]

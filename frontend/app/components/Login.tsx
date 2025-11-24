@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
 
 interface LoginProps {
   toggleForm: () => void;
@@ -9,11 +11,25 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ toggleForm }) => {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
+  const { login } = useAuth();
+  const router = useRouter();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement login logic here (e.g., Firebase Authentication)
-    console.log('Logging in with:', { email, password });
+    setError('');
+    setIsLoading(true);
+
+    try {
+      await login(email, password);
+      // Redirect to dashboard after successful login
+      router.push('/DashBoard');
+    } catch (err: any) {
+      setError(err.message || 'Login failed. Please check your credentials.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -22,6 +38,12 @@ const Login: React.FC<LoginProps> = ({ toggleForm }) => {
       <p className="text-sm text-gray-500 mb-8">Sign in to your Uni-Smart account.</p>
       
       <form onSubmit={handleLogin} className="w-full space-y-5">
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            {error}
+          </div>
+        )}
+
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email Address</label>
           <input
@@ -30,7 +52,9 @@ const Login: React.FC<LoginProps> = ({ toggleForm }) => {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-colors"
+            disabled={isLoading}
+            placeholder="example@anjuman.edu.in"
+            className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
           />
         </div>
         <div>
@@ -41,14 +65,16 @@ const Login: React.FC<LoginProps> = ({ toggleForm }) => {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-colors"
+            disabled={isLoading}
+            className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
           />
         </div>
         <button
           type="submit"
-          className="w-full inline-flex justify-center rounded-lg border border-transparent bg-blue-600 py-3 text-base font-semibold text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+          disabled={isLoading}
+          className="w-full inline-flex justify-center rounded-lg border border-transparent bg-blue-600 py-3 text-base font-semibold text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed"
         >
-          Login
+          {isLoading ? 'Logging in...' : 'Login'}
         </button>
       </form>
 

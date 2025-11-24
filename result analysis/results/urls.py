@@ -15,8 +15,8 @@ from rest_framework_simplejwt.views import (
 from . import views
 from .views import (
     UserViewSet, DepartmentViewSet, SubjectViewSet,
-    StudentViewSet, FacultyViewSet, StudentResultViewSet,
-    ScraperViewSet, AnalyticsViewSet, ExamScheduleViewSet,
+    StudentViewSet, FacultyViewSet, FacultySubjectAssignmentViewSet,
+    StudentResultViewSet, ScraperViewSet, AnalyticsViewSet, ExamScheduleViewSet,
     # Real-time analytics views
     subject_analytics_view, batch_analytics_view,
     department_overview_view, student_comparison_view
@@ -30,6 +30,7 @@ router.register(r'departments', DepartmentViewSet, basename='department')
 router.register(r'subjects', SubjectViewSet, basename='subject')
 router.register(r'students', StudentViewSet, basename='student')
 router.register(r'faculty', FacultyViewSet, basename='faculty')
+router.register(r'faculty-assignments', FacultySubjectAssignmentViewSet, basename='faculty-assignment')
 router.register(r'results', StudentResultViewSet, basename='result')
 router.register(r'scraper', ScraperViewSet, basename='scraper')
 router.register(r'analytics', AnalyticsViewSet, basename='analytics')
@@ -38,6 +39,7 @@ router.register(r'exams', ExamScheduleViewSet, basename='exam')
 # URL patterns
 urlpatterns = [
     # JWT Authentication endpoints
+    path('auth/register/', views.register_user, name='register_user'),
     path('auth/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/verify/', TokenVerifyView.as_view(), name='token_verify'),
