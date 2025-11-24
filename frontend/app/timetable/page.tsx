@@ -762,6 +762,9 @@ export default function TimetablePage() {
                   <p className="text-xs text-gray-700 mt-3 bg-yellow-50 border border-yellow-200 rounded p-2">
                     <strong>Important:</strong> Whether a subject has theory or lab sessions is determined by the <strong>hours you specify</strong>, not the subject type. For example, PCC can have both theory and lab if you enter values for both.
                   </p>
+                  <p className="text-xs text-gray-700 mt-2 bg-orange-50 border border-orange-200 rounded p-2">
+                    <strong>Note:</strong> <span className="font-bold text-orange-700">PROJ</span> and <span className="font-bold text-orange-700">MP</span> are <strong>PROJECT types</strong> (not lab types). Projects are scheduled in dedicated time slots, typically in the afternoon.
+                  </p>
                 </div>
               </div>
             </div>
@@ -842,12 +845,12 @@ export default function TimetablePage() {
                               <option value="AEC">AEC - Ability Enhancement Course</option>
                               <option value="SEC">SEC - Skill Enhancement Course</option>
                               <option value="ESC">ESC - Engineering Science Course</option>
-                              <option value="PROJ">PROJ - Project Work</option>
+                              <option value="PROJ">PROJ - Project Work (Project Type)</option>
                             </optgroup>
                             <optgroup label="Legacy Types (Old Curriculum)">
                               <option value="IPCC">IPCC - Integrated Professional Core</option>
                               <option value="HSMC">HSMC - Humanities</option>
-                              <option value="MP">MP - Major/Mini Project</option>
+                              <option value="MP">MP - Major/Mini Project (Project Type)</option>
                               <option value="INT">INT - Internship</option>
                             </optgroup>
                           </select>

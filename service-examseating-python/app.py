@@ -225,33 +225,186 @@ def create_registration():
             cursor.close()
             conn.close()
 
+def extract_usns_from_excel(file):
+    """Extract USNs from Excel file"""
+    try:
+        df = pd.read_excel(file, engine='openpyxl')
+        # Look for USN column (case insensitive)
+        usn_column = None
+        for col in df.columns:
+            if 'usn' in str(col).lower():
+                usn_column = col
+                break
+
+        if usn_column is None:
+            # Try first column if no USN column found
+            usn_column = df.columns[0]
+
+        usns = df[usn_column].dropna().astype(str).str.strip().tolist()
+        return [usn for usn in usns if usn and usn.upper() != 'USN']
+    except Exception as e:
+        print(f"Error extracting from Excel: {e}")
+        return []
+
+def extract_usns_from_word(file):
+    """Extract USNs from Word document"""
+    try:
+        doc = Document(file)
+        usns = []
+        usn_pattern = re.compile(r'\b[A-Z0-9]{10}\b')  # VTU USN pattern
+
+        for paragraph in doc.paragraphs:
+            matches = usn_pattern.findall(paragraph.text)
+            usns.extend(matches)
+
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    matches = usn_pattern.findall(cell.text)
+                    usns.extend(matches)
+
+        return list(set(usns))  # Remove duplicates
+    except Exception as e:
+        print(f"Error extracting from Word: {e}")
+        return []
+
+def extract_usns_from_pdf(file):
+    """Extract USNs from PDF file"""
+    try:
+        pdf_reader = PyPDF2.PdfReader(file)
+        usns = []
+        usn_pattern = re.compile(r'\b[A-Z0-9]{10}\b')  # VTU USN pattern
+
+        for page in pdf_reader.pages:
+            text = page.extract_text()
+            matches = usn_pattern.findall(text)
+            usns.extend(matches)
+
+        return list(set(usns))  # Remove duplicates
+    except Exception as e:
+        print(f"Error extracting from PDF: {e}")
+        return []
+
 @app.route('/registrations/batch', methods=['POST'])
 def create_batch_registrations():
-    """Register multiple students for an exam"""
-    data = request.json
-    exam_id = data.get('exam_id')
-    student_usns = data.get('student_usns', [])
+    """Register multiple students for an exam - supports JSON, Excel, Word, PDF"""
+    print("\n" + "="*60)
+    print("[BATCH REGISTRATION] Received request")
+    print("="*60)
 
-    if not exam_id or not student_usns:
-        return jsonify({"error": "Missing required fields"}), 400
+    student_usns = []
+    exam_id = None
+
+    # Check if it's a file upload
+    if 'file' in request.files:
+        file = request.files['file']
+        exam_id = request.form.get('exam_id')
+
+        print(f"[FILE UPLOAD] Filename: {file.filename}")
+        print(f"[FILE UPLOAD] Exam ID: {exam_id}")
+
+        if not file or not exam_id:
+            return jsonify({"error": "Missing file or exam_id"}), 400
+
+        filename = file.filename.lower()
+
+        # Extract USNs based on file type
+        if filename.endswith(('.xlsx', '.xls')):
+            print("[PROCESSING] Excel file detected")
+            student_usns = extract_usns_from_excel(file)
+        elif filename.endswith('.docx'):
+            print("[PROCESSING] Word file detected")
+            student_usns = extract_usns_from_word(file)
+        elif filename.endswith('.pdf'):
+            print("[PROCESSING] PDF file detected")
+            student_usns = extract_usns_from_pdf(file)
+        else:
+            return jsonify({"error": "Unsupported file format. Use Excel, Word, or PDF"}), 400
+
+    # JSON input (original method)
+    elif request.json:
+        data = request.json
+        exam_id = data.get('exam_id')
+        student_usns = data.get('student_usns', [])
+        print("[JSON INPUT] Received JSON data")
+        print(f"[JSON INPUT] Exam ID: {exam_id}")
+        print(f"[JSON INPUT] USNs count: {len(student_usns)}")
+
+    else:
+        return jsonify({"error": "No data provided. Send JSON or upload a file"}), 400
+
+    if not exam_id:
+        return jsonify({"error": "exam_id is required"}), 400
+
+    if not student_usns:
+        return jsonify({"error": "No valid student USNs found"}), 400
+
+    print(f"\n[VALIDATION] Total USNs extracted: {len(student_usns)}")
+    print(f"[VALIDATION] Sample USNs: {student_usns[:5]}")
 
     conn = mysql.connector.connect(**db_config)
     try:
         cursor = conn.cursor()
 
-        # Prepare batch insert
-        values = [(usn, exam_id) for usn in student_usns]
+        # Check if exam exists
+        cursor.execute("SELECT id FROM exams WHERE id = %s", (exam_id,))
+        if not cursor.fetchone():
+            return jsonify({"error": f"Exam with ID {exam_id} not found"}), 404
+
+        # Check which students exist in the database
+        format_strings = ','.join(['%s'] * len(student_usns))
+        cursor.execute(
+            f"SELECT usn FROM students WHERE usn IN ({format_strings})",
+            tuple(student_usns)
+        )
+        existing_students = {row[0] for row in cursor.fetchall()}
+
+        print(f"[DATABASE CHECK] Found {len(existing_students)} existing students in database")
+
+        if len(existing_students) == 0:
+            return jsonify({
+                "error": "None of the provided USNs exist in the students table",
+                "provided_usns": student_usns[:10],
+                "suggestion": "Please ensure students are added to the system first"
+            }), 400
+
+        # Filter to only existing students
+        valid_usns = [usn for usn in student_usns if usn in existing_students]
+        invalid_usns = [usn for usn in student_usns if usn not in existing_students]
+
+        print(f"[FILTERING] Valid USNs: {len(valid_usns)}")
+        print(f"[FILTERING] Invalid USNs: {len(invalid_usns)}")
+
+        # Prepare batch insert for valid students only
+        values = [(usn, exam_id) for usn in valid_usns]
+
+        # Use INSERT IGNORE to skip duplicates
         cursor.executemany(
             "INSERT IGNORE INTO exam_registrations (student_usn, exam_id) VALUES (%s, %s)",
             values
         )
         conn.commit()
 
-        return jsonify({
-            "message": f"Successfully registered {cursor.rowcount} students",
-            "registered_count": cursor.rowcount
-        }), 201
+        registered_count = cursor.rowcount
+        print(f"\n[SUCCESS] Registered {registered_count} students")
+        print("="*60 + "\n")
+
+        response = {
+            "message": f"Successfully registered {registered_count} students",
+            "registered_count": registered_count,
+            "total_provided": len(student_usns),
+            "valid_usns": len(valid_usns),
+            "invalid_usns": len(invalid_usns)
+        }
+
+        if invalid_usns:
+            response["invalid_usn_samples"] = invalid_usns[:5]
+
+        return jsonify(response), 201
+
     except Exception as e:
+        print(f"\n[ERROR] {str(e)}")
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
     finally:
         if conn and conn.is_connected():
@@ -293,7 +446,7 @@ def generate_seating_plan():
     try:
         cursor = conn.cursor(dictionary=True)
 
-        print('[EXAM_SERVICE] 💾 Fetching data from database...')
+        print('[EXAM_SERVICE] [DB] Fetching data from database...')
 
         # 1. Fetch all available exam rooms
         cursor.execute("SELECT id, num_rows, num_cols FROM exam_rooms")
@@ -321,14 +474,14 @@ def generate_seating_plan():
         print(f"   - Found {len(registrations)} student registrations across {len(students_by_subject)} subjects.")
 
         # 3. Run the seating algorithm
-        print('[EXAM_SERVICE] ⚙️ Starting seating arrangement algorithm...')
+        print('[EXAM_SERVICE] [ALGO] Starting seating arrangement algorithm...')
         seating_plan = arrange_seats(rooms_data, students_by_subject)
 
-        print('[EXAM_SERVICE] ➡ Sending response back to the gateway...')
+        print('[EXAM_SERVICE] [RESPONSE] Sending response back to the gateway...')
         return jsonify(seating_plan)
 
     except Exception as e:
-        print(f"[EXAM_SERVICE] ❌ An error occurred:")
+        print(f"[EXAM_SERVICE] [ERROR] An error occurred:")
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
     finally:

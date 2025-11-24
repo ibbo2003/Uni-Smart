@@ -264,11 +264,12 @@ async function generatePDF(res, timetableData, sectionInfo, facultyMap) {
 
       // Check for horizontal merge condition:
       // - non-empty first slot
-      // - subject_type indicates project (case-insensitive) OR the subject repeats in the next column(s)
+      // - subject_type indicates project (PROJ or MP) OR the subject repeats in the next column(s)
       // We'll merge only across adjacent columns that map to periods (gridIndex != null)
       let mergedSpan = 1;
       let firstSlot = (slots.length > 0) ? slots[0] : null;
-      const isProject = firstSlot && firstSlot.subject_type && String(firstSlot.subject_type).toLowerCase().includes('project');
+      const subjectType = firstSlot ? String(firstSlot.subject_type || '').toUpperCase() : '';
+      const isProject = subjectType === 'PROJ' || subjectType === 'MP';
 
       if (firstSlot) {
         // Attempt to expand merge if project OR if subject_code repeats in later consecutive periods (useful for multi-period classes)

@@ -1,6 +1,6 @@
 # 🎓 Uni-Smart v5.1 - Academic Management System
 
-> Enhanced VTU 2024 Compliance | Smart Lab Scheduling | Microservices Architecture
+> Enhanced VTU 2024 Compliance | Hybrid Intelligent Lab Scheduling | Microservices Architecture
 
 ## 📋 Table of Contents
 
@@ -52,7 +52,10 @@ Uni-Smart is a comprehensive academic management system built with microservices
 ## ✨ Features
 
 ### 🗓️ Timetable Generation (v5.1)
+- **Hybrid Intelligent Scheduler**: Automatically switches between rotation and simultaneous modes based on lab room availability
 - **Smart Lab Scheduling**: Automatically uses afternoon slots when no projects scheduled
+- **Rotation Mode**: Different subjects in parallel with batch rotation (ideal for 2-3 lab subjects)
+- **Simultaneous Mode**: Both batches attend same subject with one faculty (handles 5+ lab subjects with limited rooms)
 - **VTU Saturday Awareness**: Minimizes Saturday labs (1st & 3rd Saturday holidays)
 - **Updated Subject Types**: PCC, PCCL, PEC, OEC, UHV, MC, AEC, SEC, ESC, PROJ
 - **Theory/Lab Flexibility**: Determined by hours specified, not subject type
@@ -68,6 +71,8 @@ Uni-Smart is a comprehensive academic management system built with microservices
 - Intelligent seating arrangement
 - Room optimization
 - Student distribution
+- **Batch Registration**: Upload Excel, Word, or PDF files with USN lists
+- **Smart Validation**: Pre-validates students exist before registration
 
 ---
 
@@ -274,7 +279,39 @@ docker-compose down -v
 
 ## 🎯 Timetable v5.1 Enhancements
 
-### **1. Smart Lab Scheduling**
+### **1. Hybrid Intelligent Lab Scheduler** 🆕
+
+The scheduler automatically chooses the optimal mode based on lab room availability:
+
+#### **Rotation Mode** (When lab_subjects ≤ available_rooms)
+```
+Example: 2 Lab Subjects, 2 Batches, 4 Lab Rooms Available
+├── Session 1: Batch 1 → CN (Lab1), Batch 2 → WEB (Lab2)
+└── Session 2: Batch 1 → WEB (Lab1), Batch 2 → CN (Lab2)
+✅ Both batches cover all subjects in 2 sessions
+```
+
+#### **Simultaneous Mode** (When lab_subjects > available_rooms)
+```
+Example: 5 Lab Subjects, 2 Batches, 4 Lab Rooms Available
+├── Session 1: Batch 1 → DDCO (Lab1), Batch 2 → DDCO (Lab2)
+├── Session 2: Batch 1 → OS (Lab1), Batch 2 → OS (Lab2)
+├── Session 3: Batch 1 → OOP (Lab1), Batch 2 → OOP (Lab2)
+├── Session 4: Batch 1 → DS_LAB (Lab1), Batch 2 → DS_LAB (Lab2)
+└── Session 5: Batch 1 → GIT (Lab1), Batch 2 → GIT (Lab2)
+✅ Both batches cover all subjects in 5 sessions
+✅ One faculty manages both batches (realistic for colleges)
+✅ Uses only 2 lab rooms instead of requiring 5!
+```
+
+**Key Benefits:**
+- ✅ Handles ANY number of lab subjects with limited lab rooms
+- ✅ No phantom batch creation (fixed batch count bug)
+- ✅ Efficient lab room utilization
+- ✅ Future-proof for any section configuration
+- ✅ Realistic faculty allocation (one faculty can supervise both batches)
+
+### **2. Smart Lab Scheduling**
 ```
 Section with Projects:
 ├── Day 1: No project  → ✅ Labs can use afternoon
@@ -283,12 +320,12 @@ Section with Projects:
 └── Maximum flexibility achieved!
 ```
 
-### **2. VTU Saturday Holiday Awareness**
+### **3. VTU Saturday Holiday Awareness**
 - Penalty applied: -50 per Saturday lab
 - Projects exempt from penalty
 - Encourages weekday distribution
 
-### **3. Updated Subject Types**
+### **4. Updated Subject Types**
 
 | Code | Description |
 |------|-------------|
@@ -305,7 +342,7 @@ Section with Projects:
 
 **Legacy Support**: IPCC, HSMC, MP, INT
 
-### **4. Theory/Lab Determination**
+### **5. Theory/Lab Determination**
 
 ✅ **NEW**: Based on hours specified
 ```
