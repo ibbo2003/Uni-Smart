@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { UserGroupIcon, PlusIcon, TrashIcon, ArrowLeftIcon, DocumentArrowUpIcon, CloudArrowUpIcon } from '@heroicons/react/24/outline';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 interface Student {
   registration_id: number;
@@ -235,20 +236,23 @@ export default function ManageRegistrationsPage() {
 
   if (!examId || !subjectCode) {
     return (
-      <main className="container mx-auto p-8">
-        <div className="bg-red-100 text-red-800 p-6 rounded-lg">
-          <h2 className="text-xl font-bold mb-2">Error</h2>
-          <p>Missing exam information. Please select an exam from the exams list.</p>
-          <Link href="/exam-seating/manage-exams" className="text-blue-600 hover:underline mt-4 inline-block">
-            Go to Manage Exams
-          </Link>
-        </div>
-      </main>
+      <ProtectedRoute allowedRoles={['ADMIN', 'FACULTY']}>
+        <main className="container mx-auto p-8">
+          <div className="bg-red-100 text-red-800 p-6 rounded-lg">
+            <h2 className="text-xl font-bold mb-2">Error</h2>
+            <p>Missing exam information. Please select an exam from the exams list.</p>
+            <Link href="/exam-seating/manage-exams" className="text-blue-600 hover:underline mt-4 inline-block">
+              Go to Manage Exams
+            </Link>
+          </div>
+        </main>
+      </ProtectedRoute>
     );
   }
 
   return (
-    <main className="container mx-auto p-8">
+    <ProtectedRoute allowedRoles={['ADMIN', 'FACULTY']}>
+      <main className="container mx-auto p-8">
       {/* Header */}
       <div className="mb-8">
         <Link href="/exam-seating/manage-exams" className="flex items-center text-blue-600 hover:text-blue-800 mb-2">
@@ -593,6 +597,7 @@ export default function ManageRegistrationsPage() {
           </div>
         </div>
       )}
-    </main>
+      </main>
+    </ProtectedRoute>
   );
 }

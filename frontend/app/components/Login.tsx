@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 
@@ -13,8 +13,21 @@ const Login: React.FC<LoginProps> = ({ toggleForm }) => {
   const [password, setPassword] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const router = useRouter();
+
+  // Redirect based on role when user is available
+  useEffect(() => {
+    if (user) {
+      if (user.role === 'ADMIN') {
+        router.push('/admin');
+      } else if (user.role === 'FACULTY') {
+        router.push('/timetable');
+      } else if (user.role === 'STUDENT') {
+        router.push('/exam-seating');
+      }
+    }
+  }, [user, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,11 +36,9 @@ const Login: React.FC<LoginProps> = ({ toggleForm }) => {
 
     try {
       await login(email, password);
-      // Redirect to dashboard after successful login
-      router.push('/DashBoard');
+      // Redirect will happen via useEffect when user state updates
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check your credentials.');
-    } finally {
       setIsLoading(false);
     }
   };
@@ -36,7 +47,7 @@ const Login: React.FC<LoginProps> = ({ toggleForm }) => {
     <div className="flex flex-col items-center">
       <h2 className="text-3xl font-bold text-gray-800 mb-6">Welcome Back!</h2>
       <p className="text-sm text-gray-500 mb-8">Sign in to your Uni-Smart account.</p>
-      
+
       <form onSubmit={handleLogin} className="w-full space-y-5">
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">

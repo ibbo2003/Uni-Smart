@@ -1,6 +1,15 @@
 Flask
+<<<<<<< HEAD
 Flask-CORS
+=======
+<<<<<<< Updated upstream
+=======
+Flask-CORS
+Flask-JWT-Extended
+>>>>>>> Stashed changes
+>>>>>>> test
 pandas
 mysql-connector-python
 openpyxl
 python-dotenv
+PyJWT

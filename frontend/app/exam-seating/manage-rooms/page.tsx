@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { BuildingOfficeIcon, PlusIcon, PencilIcon, TrashIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 interface Room {
   id: string;
@@ -134,9 +135,10 @@ export default function ManageRoomsPage() {
   };
 
   return (
-    <main className="container mx-auto p-8">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-8">
+    <ProtectedRoute allowedRoles={['ADMIN', 'FACULTY']}>
+      <main className="container mx-auto p-8">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-8">
         <div>
           <Link href="/exam-seating" className="flex items-center text-blue-600 hover:text-blue-800 mb-2">
             <ArrowLeftIcon className="h-5 w-5 mr-2" />
@@ -322,6 +324,7 @@ export default function ManageRoomsPage() {
           </div>
         </div>
       )}
-    </main>
+      </main>
+    </ProtectedRoute>
   );
 }

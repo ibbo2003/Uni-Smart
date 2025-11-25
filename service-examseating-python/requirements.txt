@@ -1,4 +1,5 @@
 Flask
+<<<<<<< HEAD
 Flask-CORS
 mysql-connector-python
 python-dotenv
@@ -8,3 +9,22 @@ PyPDF2
 pdfplumber
 tabula-py
 openpyxl
+=======
+<<<<<<< Updated upstream
+mysql-connector-python
+python-dotenv
+pandas
+=======
+Flask-CORS
+Flask-JWT-Extended
+mysql-connector-python
+python-dotenv
+pandas
+python-docx
+PyPDF2
+PyJWT
+pdfplumber
+tabula-py
+openpyxl
+>>>>>>> Stashed changes
+>>>>>>> test

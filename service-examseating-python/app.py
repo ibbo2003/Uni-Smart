@@ -5,6 +5,7 @@ import mysql.connector
 import os
 from dotenv import load_dotenv
 from seating_algorithm import arrange_seats
+from auth_middleware import require_auth, require_admin_or_faculty, require_admin
 import traceback
 import pandas as pd
 from docx import Document
@@ -25,8 +26,10 @@ db_config = {
 
 # ================== EXAM ROOMS ENDPOINTS ==================
 @app.route('/rooms', methods=['GET'])
+@require_auth()  # Any authenticated user can view rooms
 def get_all_rooms():
-    """Get all exam rooms"""
+    """Get all exam rooms - Any authenticated user"""
+
     conn = mysql.connector.connect(**db_config)
     try:
         cursor = conn.cursor(dictionary=True)
@@ -41,8 +44,10 @@ def get_all_rooms():
             conn.close()
 
 @app.route('/rooms', methods=['POST'])
+@require_admin_or_faculty
 def create_room():
-    """Create a new exam room"""
+    """Create a new exam room - ADMIN and FACULTY only"""
+
     data = request.json
     room_id = data.get('id')
     num_rows = data.get('num_rows')
@@ -72,8 +77,11 @@ def create_room():
             conn.close()
 
 @app.route('/rooms/<room_id>', methods=['PUT'])
+
+@require_admin_or_faculty
 def update_room(room_id):
-    """Update an existing exam room"""
+    """Update an existing exam room - ADMIN and FACULTY only"""
+
     data = request.json
     num_rows = data.get('num_rows')
     num_cols = data.get('num_cols')
@@ -104,8 +112,11 @@ def update_room(room_id):
             conn.close()
 
 @app.route('/rooms/<room_id>', methods=['DELETE'])
+
+@require_admin_or_faculty
 def delete_room(room_id):
-    """Delete an exam room"""
+    """Delete an exam room - ADMIN and FACULTY only"""
+
     conn = mysql.connector.connect(**db_config)
     try:
         cursor = conn.cursor()
@@ -125,8 +136,11 @@ def delete_room(room_id):
 
 # ================== EXAMS ENDPOINTS ==================
 @app.route('/exams', methods=['GET'])
+
+@require_auth()  # Any authenticated user can view exams
 def get_all_exams():
-    """Get all exams"""
+    """Get all exams - Any authenticated user"""
+
     conn = mysql.connector.connect(**db_config)
     try:
         cursor = conn.cursor(dictionary=True)
@@ -141,8 +155,11 @@ def get_all_exams():
             conn.close()
 
 @app.route('/exams', methods=['POST'])
+
+@require_admin_or_faculty
 def create_exam():
-    """Create a new exam"""
+    """Create a new exam - ADMIN and FACULTY only"""
+
     data = request.json
     subject_code = data.get('subject_code')
     exam_date = data.get('exam_date')
@@ -174,8 +191,11 @@ def create_exam():
             conn.close()
 
 @app.route('/exams/<int:exam_id>', methods=['DELETE'])
+
+@require_admin_or_faculty
 def delete_exam(exam_id):
-    """Delete an exam"""
+    """Delete an exam - ADMIN and FACULTY only"""
+
     conn = mysql.connector.connect(**db_config)
     try:
         cursor = conn.cursor()
@@ -195,8 +215,9 @@ def delete_exam(exam_id):
 
 # ================== EXAM REGISTRATIONS ENDPOINTS ==================
 @app.route('/registrations', methods=['POST'])
+@require_admin_or_faculty
 def create_registration():
-    """Register a student for an exam"""
+    """Register a student for an exam - ADMIN and FACULTY only"""
     data = request.json
     student_usn = data.get('student_usn')
     exam_id = data.get('exam_id')
@@ -286,8 +307,9 @@ def extract_usns_from_pdf(file):
         return []
 
 @app.route('/registrations/batch', methods=['POST'])
+@require_admin_or_faculty
 def create_batch_registrations():
-    """Register multiple students for an exam - supports JSON, Excel, Word, PDF"""
+    """Register multiple students for an exam - ADMIN and FACULTY only"""
     print("\n" + "="*60)
     print("[BATCH REGISTRATION] Received request")
     print("="*60)
@@ -412,8 +434,9 @@ def create_batch_registrations():
             conn.close()
 
 @app.route('/exams/<int:exam_id>/registrations', methods=['GET'])
+@require_auth()  # Any authenticated user can view registrations
 def get_exam_registrations(exam_id):
-    """Get all students registered for a specific exam"""
+    """Get all students registered for a specific exam - Any authenticated user"""
     conn = mysql.connector.connect(**db_config)
     try:
         cursor = conn.cursor(dictionary=True)
@@ -434,8 +457,9 @@ def get_exam_registrations(exam_id):
             conn.close()
 
 @app.route('/extract-students-from-pdf', methods=['POST'])
+@require_admin_or_faculty
 def extract_students_from_pdf():
-    """Extract student data from uploaded PDF file"""
+    """Extract student data from uploaded PDF file - ADMIN and FACULTY only"""
     if 'file' not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
 
@@ -495,8 +519,9 @@ def extract_students_from_pdf():
         return jsonify({"error": f"Failed to extract data from PDF: {str(e)}"}), 500
 
 @app.route('/students/batch-create', methods=['POST'])
+@require_admin_or_faculty
 def batch_create_students():
-    """Create multiple students from extracted PDF data"""
+    """Create multiple students from extracted PDF data - ADMIN and FACULTY only"""
     data = request.json
     students = data.get('students', [])
 
@@ -531,10 +556,14 @@ def batch_create_students():
             conn.close()
 
 # ================== SEATING PLAN ENDPOINTS ==================
+
 @app.route('/generate_seating', methods=['POST'])
+@require_admin_or_faculty
 def generate_seating_plan():
+    """Generate seating plan - ADMIN and FACULTY only"""
+    user = request.current_user
     print('-----------------------------------------')
-    print('[EXAM_SERVICE] Received request from gateway...')
+    print(f'[EXAM_SERVICE] Received request from {user["role"]} user (ID: {user["id"]})')
     data = request.json
     exam_date = data['exam_date']
     exam_session = data['exam_session']
@@ -603,9 +632,13 @@ def generate_seating_plan():
             cursor.close()
             conn.close()
 
+
+
 @app.route('/seating-plan', methods=['GET'])
+@require_auth()  # Any authenticated user can view seating plans
 def get_seating_plan():
-    """Get saved seating plan for a specific exam date and session"""
+    """Get saved seating plan for a specific exam date and session - Any authenticated user"""
+
     exam_date = request.args.get('exam_date')
     exam_session = request.args.get('exam_session')
 
@@ -640,6 +673,7 @@ def get_seating_plan():
         if conn and conn.is_connected():
             cursor.close()
             conn.close()
+
 
 if __name__ == '__main__':
     # Run on a different port than the timetable service

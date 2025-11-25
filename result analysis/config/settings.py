@@ -111,6 +111,14 @@ DATABASES = {
 AUTH_USER_MODEL = 'results.User'
 
 
+# Authentication Backends
+# Custom backend allows students/faculty to login with email, admins with username
+AUTHENTICATION_BACKENDS = [
+    'results.backends.EmailOrUsernameBackend',  # Custom backend for email/username login
+    'django.contrib.auth.backends.ModelBackend',  # Default backend (fallback)
+]
+
+
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
 
