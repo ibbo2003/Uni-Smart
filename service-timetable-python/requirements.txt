@@ -1,5 +1,11 @@
 Flask
+<<<<<<< Updated upstream
+=======
+Flask-CORS
+Flask-JWT-Extended
+>>>>>>> Stashed changes
 pandas
 mysql-connector-python
 openpyxl
 python-dotenv
+PyJWT

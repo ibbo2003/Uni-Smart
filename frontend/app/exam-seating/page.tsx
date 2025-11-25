@@ -1,5 +1,18 @@
 "use client";
 import { useState } from 'react';
+<<<<<<< Updated upstream
+=======
+import Link from 'next/link';
+import {
+  BuildingOfficeIcon,
+  CalendarIcon,
+  UserGroupIcon,
+  RocketLaunchIcon,
+  ClipboardDocumentListIcon
+} from '@heroicons/react/24/outline';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { RoleGuard } from '@/components/RoleGuard';
+>>>>>>> Stashed changes
 
 // --- INTERFACES ---
 interface Seat {
@@ -108,11 +121,79 @@ export default function ExamSeatingPage() {
   };
 
   return (
+<<<<<<< Updated upstream
     <main className="container mx-auto p-8">
       <h1 className="text-3xl font-bold">Exam Seating Arrangement</h1>
       
       {/* Input Form */}
       <form onSubmit={handleSubmit} className="mt-10 bg-white p-8 rounded-lg shadow-md space-y-6">
+=======
+    <ProtectedRoute allowedRoles={['ADMIN', 'FACULTY', 'STUDENT']}>
+      <main className="container mx-auto p-8">
+        {/* Page Header */}
+        <div className="mb-10">
+          <h1 className="text-4xl font-bold text-gray-800 mb-2">Exam Seating Arrangement</h1>
+          <p className="text-gray-600">Manage exam rooms, schedule exams, and generate seating arrangements</p>
+        </div>
+
+      {/* Management Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        {/* Manage Rooms Card */}
+        <Link href="/exam-seating/manage-rooms">
+          <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all duration-300 cursor-pointer border-2 border-transparent hover:border-blue-500">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-blue-100 rounded-lg">
+                <BuildingOfficeIcon className="h-8 w-8 text-blue-600" />
+              </div>
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">Manage Rooms</h3>
+            <p className="text-gray-600 text-sm">Add, edit, or remove exam rooms and configure their seating layouts</p>
+          </div>
+        </Link>
+
+        {/* Manage Exams Card */}
+        <Link href="/exam-seating/manage-exams">
+          <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all duration-300 cursor-pointer border-2 border-transparent hover:border-green-500">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-green-100 rounded-lg">
+                <CalendarIcon className="h-8 w-8 text-green-600" />
+              </div>
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">Manage Exams</h3>
+            <p className="text-gray-600 text-sm">Schedule exams, set dates and sessions, and manage student registrations</p>
+          </div>
+        </Link>
+
+        {/* Quick Stats Card */}
+        <div className="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl shadow-lg p-6 text-white">
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-3 bg-white bg-opacity-20 rounded-lg">
+              <ClipboardDocumentListIcon className="h-8 w-8 text-white" />
+            </div>
+          </div>
+          <h3 className="text-xl font-bold mb-2">Quick Info</h3>
+          <p className="text-sm text-purple-100">Generate seating arrangements below after setting up rooms and registering students</p>
+        </div>
+      </div>
+
+      {/* Generate Seating Section */}
+      <RoleGuard
+        allowedRoles={['ADMIN', 'FACULTY']}
+        fallback={
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center">
+            <p className="text-gray-700">Only administrators and faculty can generate seating arrangements.</p>
+          </div>
+        }
+      >
+        <div className="bg-white rounded-xl shadow-lg p-8 mb-10">
+          <div className="flex items-center mb-6">
+            <RocketLaunchIcon className="h-8 w-8 text-blue-600 mr-3" />
+            <h2 className="text-2xl font-bold text-gray-800">Generate Seating Arrangement</h2>
+          </div>
+
+        {/* Input Form */}
+        <form onSubmit={handleSubmit} className="space-y-6">
+>>>>>>> Stashed changes
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                   <label htmlFor="examDate" className="block text-sm font-medium text-gray-700">Exam Date</label>
@@ -131,11 +212,45 @@ export default function ExamSeatingPage() {
                 </button>
               </div>
           </div>
+<<<<<<< Updated upstream
           <p className="text-xs text-gray-500">Note: This demo assumes exam rooms and student registrations are already in the database.</p>
       </form>
       
       {/* Display Grid */}
       {seatingPlan.length > 0 && <SeatingPlanGrid plan={seatingPlan} rooms={roomLayouts} />}
     </main>
+=======
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <p className="text-sm text-gray-700">
+              <strong>Note:</strong> Make sure you have created exam rooms, scheduled exams, and registered students before generating the seating plan.
+            </p>
+          </div>
+          {message && (
+            <div className={`p-4 rounded-lg ${seatingPlan.length > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+              {message}
+            </div>
+          )}
+        </form>
+        </div>
+
+        {/* Display Grid */}
+        {seatingPlan.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-800">Generated Seating Plan</h2>
+              <button
+                onClick={() => window.print()}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                Print Seating Plan
+              </button>
+            </div>
+            <SeatingPlanGrid plan={seatingPlan} rooms={roomLayouts} />
+          </div>
+        )}
+      </RoleGuard>
+      </main>
+    </ProtectedRoute>
+>>>>>>> Stashed changes
   );
 }

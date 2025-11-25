@@ -1,4 +1,18 @@
 Flask
+<<<<<<< Updated upstream
 mysql-connector-python
 python-dotenv
 pandas
+=======
+Flask-CORS
+Flask-JWT-Extended
+mysql-connector-python
+python-dotenv
+pandas
+python-docx
+PyPDF2
+PyJWT
+pdfplumber
+tabula-py
+openpyxl
+>>>>>>> Stashed changes

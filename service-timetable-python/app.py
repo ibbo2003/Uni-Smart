@@ -1,11 +1,15 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import mysql.connector
 from scheduler import generate_semester_timetable
 from dotenv import load_dotenv
 import os
+from auth_middleware import require_admin_or_faculty
+
 load_dotenv()
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for frontend requests
 
 db_config = {
     'host': os.getenv('DB_HOST'),
@@ -24,8 +28,14 @@ def get_db_connection():
         return None
 
 @app.route('/generate', methods=['POST'])
+@require_admin_or_faculty
 def generate():
-    print('[PYTHON] Received request from gateway...')
+    """
+    Generate timetable - ADMIN and FACULTY only
+    Requires JWT authentication
+    """
+    user = request.current_user
+    print(f'[PYTHON] Received request from {user["role"]} user (ID: {user["id"]})')
     conn = get_db_connection()
     if conn is None:
         return jsonify({"error": "Could not connect to the database"}), 500

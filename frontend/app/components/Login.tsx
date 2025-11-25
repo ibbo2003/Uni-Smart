@@ -12,8 +12,30 @@ const Login: React.FC<LoginProps> = ({ toggleForm }) => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+<<<<<<< Updated upstream
     // TODO: Implement login logic here (e.g., Firebase Authentication)
     console.log('Logging in with:', { email, password });
+=======
+    setError('');
+    setIsLoading(true);
+
+    try {
+      const userData = await login(email, password);
+
+      // Redirect based on role after successful login
+      if (userData && userData.role === 'ADMIN') {
+        router.push('/admin');
+      } else if (userData && userData.role === 'FACULTY') {
+        router.push('/timetable'); // Faculty goes to timetable management
+      } else {
+        router.push('/exam-seating'); // Students go to exam seating
+      }
+    } catch (err: any) {
+      setError(err.message || 'Login failed. Please check your credentials.');
+    } finally {
+      setIsLoading(false);
+    }
+>>>>>>> Stashed changes
   };
 
   return (
