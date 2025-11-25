@@ -1,6 +1,6 @@
 # 🎓 Uni-Smart - Academic Management System
 
-> AI-Powered Timetable Generation | VTU Result Analysis | Intelligent Exam Seating
+> AI-Powered Timetable Generation | VTU Result Analysis | Intelligent Exam Seating | Enhanced VTU 2024 Compliance
 
 ![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)
 ![Node.js](https://img.shields.io/badge/Node.js-18.0+-green.svg)

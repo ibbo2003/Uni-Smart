@@ -14,13 +14,13 @@ db_config = {
     'database': os.getenv('DB_DATABASE')
 }
 
-def get_db_connection(): 
+def get_db_connection():
     try:
         conn = mysql.connector.connect(**db_config)
-        print("[PYTHON] ✅ Database connection successful.")
+        print("[PYTHON] [OK] Database connection successful.")
         return conn
     except mysql.connector.Error as err:
-        print(f"[PYTHON] ❌ Database connection failed: {err}")
+        print(f"[PYTHON] [ERROR] Database connection failed: {err}")
         return None
 
 @app.route('/generate', methods=['POST'])
@@ -37,7 +37,7 @@ def generate():
         #conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        print('[PYTHON] 💾 Fetching existing data from database...')
+        print('[PYTHON] [DB] Fetching existing data from database...')
         cursor.execute("SELECT * FROM scheduled_classes")
         master_schedule = cursor.fetchall()
         cursor.execute("SELECT * FROM faculty")
@@ -55,7 +55,7 @@ def generate():
         conn.close()
         return jsonify(generated_timetable)
     except Exception as e:
-        print(f"[PYTHON] ❌ An error occurred during generation:")
+        print(f"[PYTHON] [ERROR] An error occurred during generation:")
         return jsonify({"error": str(e)}), 500
     finally:
         if conn and conn.is_connected():

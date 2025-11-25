@@ -344,23 +344,40 @@ class OptimizedTimetableChromosome:
                 continue
 
             num_subjects = len(labs)
-            sessions_needed = num_subjects
+            available_lab_rooms = len(self.lab_rooms)
 
-            # ✅ SMART: Track which days have projects for this section
+            # Get actual number of batches from subjects
+            actual_batches = max([s.no_of_batches for s in labs if s.no_of_batches > 0], default=2)
+
+            # Track which days have projects for this section
             project_days = set()
             for gene in self.genes:
                 if (gene.section_id == section_id and
                     VTUSubjectValidator.is_project(gene.subject_type)):
                     project_days.add(gene.day)
 
+            # INTELLIGENT MODE SELECTION
+            if num_subjects > available_lab_rooms:
+                # SIMULTANEOUS MODE: Both batches, same subject, one faculty
+                print(f"\n    [SMART MODE] {section_id}: {num_subjects} subjects > {available_lab_rooms} rooms")
+                print(f"    Using SIMULTANEOUS mode (both batches attend same subject)")
+                self._schedule_simultaneous_labs(section_id, labs, actual_batches, project_days)
+                continue  # Skip rotation mode
+
+            # ROTATION MODE: Different subjects, batches rotate
+            parallel_slots = min(num_subjects, actual_batches)
+            sessions_needed = num_subjects
+
             if project_days:
-                print(f"\n    🔬 Parallel Lab Scheduling for {section_id}:")
+                print(f"\n    🔬 Parallel Lab Scheduling for {section_id} (ROTATION MODE):")
                 print(f"       Projects scheduled on days: {sorted(project_days)}")
                 print(f"       Labs can use afternoon on other days!")
             else:
-                print(f"\n    🔬 Parallel Lab Scheduling for {section_id} (no projects):")
+                print(f"\n    🔬 Parallel Lab Scheduling for {section_id} (ROTATION MODE - no projects):")
 
             print(f"       Subjects: {[lab.subject_code for lab in labs]}")
+            print(f"       Actual batches: {actual_batches}")
+            print(f"       Parallel slots per session: {parallel_slots}")
             print(f"       Rotation sessions needed: {sessions_needed}")
 
             scheduled_sessions = 0
@@ -384,27 +401,27 @@ class OptimizedTimetableChromosome:
                     for start_period in valid_start_periods:
                         if slot_found:
                             break
-                        
+
                         if not self._validate_parallel_lab_slot(
-                            day, start_period, section_id, labs, num_subjects
+                            day, start_period, section_id, labs, parallel_slots
                         ):
                             continue
-                        
+
                         available_rooms = self._get_available_lab_rooms(day, start_period, 2)
-                        if len(available_rooms) < num_subjects:
+                        if len(available_rooms) < parallel_slots:
                             continue
                         
                         print(f"          ✅ Found slot: Day {day}, Periods {start_period}-{start_period+1}")
-                        
+
                         # ✅ CRITICAL FIX: Schedule ALL batches for BOTH hours
                         genes_to_add = []  # Collect all genes first
-                        
-                        for subject_slot_idx in range(num_subjects):
-                            rotated_subject_idx = (subject_slot_idx + session_idx) % num_subjects
+
+                        for batch_idx in range(parallel_slots):
+                            rotated_subject_idx = (batch_idx + session_idx) % num_subjects
                             subject = labs[rotated_subject_idx]
-                            room_id = available_rooms[subject_slot_idx]
-                            batch_number = subject_slot_idx + 1
-                            
+                            room_id = available_rooms[batch_idx]
+                            batch_number = batch_idx + 1
+
                             print(f"             Batch {batch_number} → {subject.subject_code} in {room_id}")
                             
                             # Create BOTH time slots (hour 0 and hour 1)
@@ -439,7 +456,7 @@ class OptimizedTimetableChromosome:
                         
                         # ✅ VERIFY: Count what was added
                         added_count = len(genes_to_add)
-                        expected_count = num_subjects * 2  # 2 subjects × 2 hours = 4
+                        expected_count = parallel_slots * 2  # parallel_slots batches × 2 hours
                         print(f"          ✅ Verification: Added {added_count}/{expected_count} slots")
                         
                         if added_count != expected_count:
@@ -452,9 +469,106 @@ class OptimizedTimetableChromosome:
                     print(f"          ❌ Could not find slot for session {session_idx + 1}")
             
             print(f"\n       📊 Summary: Scheduled {scheduled_sessions}/{sessions_needed} sessions")
-    
-    def _validate_parallel_lab_slot(self, day: int, start_period: int, 
-                                    section_id: str, labs: List[Subject], 
+
+    def _schedule_simultaneous_labs(self, section_id: str, labs: List[Subject],
+                                    num_batches: int, project_days: set):
+        """
+        Schedule labs in SIMULTANEOUS mode (both batches, same subject, one faculty).
+        Used when num_subjects > available_lab_rooms.
+
+        Example: 5 subjects, 2 batches, 4 lab rooms available
+        - Session 1: Batch1→Sub1(Lab1), Batch2→Sub1(Lab2) [same faculty]
+        - Session 2: Batch1→Sub2(Lab1), Batch2→Sub2(Lab2) [same faculty]
+        - ... (5 sessions total, one per subject)
+        """
+        print(f"\n    🔬 Simultaneous Lab Scheduling for {section_id}:")
+        print(f"       Subjects: {[lab.subject_code for lab in labs]}")
+        print(f"       Batches: {num_batches}")
+        print(f"       Sessions needed: {len(labs)} (one per subject)")
+
+        scheduled_count = 0
+
+        for subject in labs:
+            print(f"\n       📅 Scheduling {subject.subject_code}:")
+            slot_found = False
+
+            for day in range(self.days_per_week):
+                if slot_found:
+                    break
+
+                # Choose valid start periods
+                if day in project_days:
+                    valid_start_periods = [0, 2]  # Morning only
+                else:
+                    valid_start_periods = [0, 2, 4]  # Morning or afternoon
+
+                for start_period in valid_start_periods:
+                    if slot_found:
+                        break
+
+                    # Check section is free for 2 hours
+                    section_free = all(
+                        self.constraint_checker.is_available(
+                            day, p, '', section_id, '', True
+                        )
+                        for p in [start_period, start_period + 1]
+                    )
+
+                    if not section_free:
+                        continue
+
+                    # Get available lab rooms
+                    available_rooms = self._get_available_lab_rooms(day, start_period, 2)
+
+                    # Need rooms equal to number of batches
+                    if len(available_rooms) < num_batches:
+                        continue
+
+                    print(f"          ✅ Found slot: Day {day}, Periods {start_period}-{start_period+1}")
+
+                    # Schedule all batches for same subject
+                    genes_to_add = []
+
+                    for batch_num in range(1, num_batches + 1):
+                        room_id = available_rooms[batch_num - 1]
+
+                        print(f"             Batch {batch_num} → {subject.subject_code} in {room_id}")
+
+                        # Create time slots for both hours
+                        for hour in range(2):
+                            gene = TimeSlot(
+                                day=day,
+                                period=start_period + hour,
+                                subject_code=subject.subject_code,
+                                subject_name=subject.subject_name,
+                                subject_type=subject.subject_type,
+                                faculty_id=subject.lab_faculty,
+                                section_id=section_id,
+                                room_id=room_id,
+                                batch_number=batch_num,
+                                is_theory=False
+                            )
+                            genes_to_add.append(gene)
+
+                        # Reserve lab room
+                        self.lab_usage_tracker[(day, start_period)].add(room_id)
+                        self.lab_usage_tracker[(day, start_period + 1)].add(room_id)
+
+                    # Add all genes
+                    for gene in genes_to_add:
+                        self.genes.append(gene)
+                        self.constraint_checker.add_slot(gene)
+
+                    scheduled_count += 1
+                    slot_found = True
+
+            if not slot_found:
+                print(f"          ❌ Could not find slot for {subject.subject_code}")
+
+        print(f"\n       📊 Summary: Scheduled {scheduled_count}/{len(labs)} subjects")
+
+    def _validate_parallel_lab_slot(self, day: int, start_period: int,
+                                    section_id: str, labs: List[Subject],
                                     num_parallel: int) -> bool:
         """CSP validation for parallel lab scheduling"""
         # Check if enough lab rooms available
