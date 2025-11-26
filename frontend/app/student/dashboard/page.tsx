@@ -9,35 +9,52 @@ import {
   ChartBarIcon,
   ClipboardDocumentCheckIcon,
   UserCircleIcon,
-  AcademicCapIcon
+  AcademicCapIcon,
+  ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline';
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api';
+
 export default function StudentDashboard() {
-  const { user } = useAuth();
+  const { user, token, logout } = useAuth();
   const router = useRouter();
   const [cgpa, setCgpa] = useState<number>(0);
   const [semestersCount, setSemestersCount] = useState<number>(0);
   const [upcomingExams, setUpcomingExams] = useState<number>(0);
 
   useEffect(() => {
-    loadDashboardData();
-  }, []);
+    if (user && token) {
+      loadDashboardData();
+    }
+  }, [user, token]);
 
   const loadDashboardData = async () => {
-    if (!user) return;
+    if (!user || !token) return;
 
     try {
-      // Fetch student overview data
-      const response = await fetch(`http://localhost:8080/api/student/overview/${user.email}`);
+      // Fetch analytics dashboard stats
+      const response = await fetch(`${API_BASE_URL}/analytics/dashboard/`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
       if (response.ok) {
         const data = await response.json();
+        // For students, data contains: usn, name, cgpa, current_semester, total_backlogs, total_subjects_taken
         setCgpa(data.cgpa || 0);
-        setSemestersCount(data.semesters_completed || 0);
-        setUpcomingExams(data.upcoming_exams || 0);
+        setSemestersCount(data.current_semester || 0);
+        setUpcomingExams(0); // This would need an exam schedule endpoint
       }
     } catch (error) {
       console.error("Failed to load dashboard data:", error);
     }
+  };
+
+  const handleLogout = () => {
+    logout();
+    router.push('/auth');
   };
 
   return (
@@ -48,12 +65,21 @@ export default function StudentDashboard() {
         <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Welcome Section */}
           <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl shadow-lg p-8 text-white mb-8">
-            <div className="flex items-center gap-4 mb-4">
-              <UserCircleIcon className="h-16 w-16" />
-              <div>
-                <h2 className="text-3xl font-bold">Welcome back!</h2>
-                <p className="text-blue-100">{user?.name || user?.email}</p>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-4">
+                <UserCircleIcon className="h-16 w-16" />
+                <div>
+                  <h2 className="text-3xl font-bold">Welcome back!</h2>
+                  <p className="text-blue-100">{user?.name || user?.email}</p>
+                </div>
               </div>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-5 py-2.5 bg-white bg-opacity-20 hover:bg-opacity-30 text-white font-semibold rounded-lg transition-all"
+              >
+                <ArrowRightOnRectangleIcon className="h-5 w-5" />
+                Logout
+              </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
               <div className="bg-white bg-opacity-20 rounded-lg p-4">
@@ -61,7 +87,7 @@ export default function StudentDashboard() {
                 <p className="text-3xl font-bold">{cgpa.toFixed(2)}</p>
               </div>
               <div className="bg-white bg-opacity-20 rounded-lg p-4">
-                <p className="text-sm opacity-90">Semesters Completed</p>
+                <p className="text-sm opacity-90">Current Semester</p>
                 <p className="text-3xl font-bold">{semestersCount}</p>
               </div>
               <div className="bg-white bg-opacity-20 rounded-lg p-4">

@@ -38,6 +38,7 @@ interface AuthContextType {
   token: string | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  refreshToken: () => Promise<string>;
   isAuthenticated: boolean;
   isLoading: boolean;
   hasRole: (roles: string | string[]) => boolean;
@@ -128,6 +129,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refreshToken = async () => {
+    try {
+      const savedRefreshToken = localStorage.getItem('refresh_token');
+      if (!savedRefreshToken) {
+        throw new Error('No refresh token available');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/auth/refresh/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refresh: savedRefreshToken }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Token refresh failed');
+      }
+
+      const data = await response.json();
+      const newAccessToken = data.access;
+
+      setToken(newAccessToken);
+      localStorage.setItem('auth_token', newAccessToken);
+
+      return newAccessToken;
+    } catch (error) {
+      console.error('Token refresh error:', error);
+      // If refresh fails, logout the user
+      logout();
+      throw error;
+    }
+  };
+
   const logout = () => {
     setToken(null);
     setUser(null);
@@ -200,6 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     token,
     login,
     logout,
+    refreshToken,
     isAuthenticated: !!user && !!token,
     isLoading,
     hasRole,

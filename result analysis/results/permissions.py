@@ -141,14 +141,15 @@ class IsAdminOrReadOnly(permissions.BasePermission):
 class CanAccessScraper(permissions.BasePermission):
     """
     Permission class for scraper operations.
-    Only Admin can initiate scrapes.
+    - ADMIN can scrape any USN
+    - STUDENT can scrape their own USN
     """
 
     def has_permission(self, request, view):
         return (
             request.user and
             request.user.is_authenticated and
-            request.user.role == 'ADMIN'
+            request.user.role in ['ADMIN', 'STUDENT']
         )
 
 

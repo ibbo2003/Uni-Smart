@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -10,11 +11,18 @@ import {
   CogIcon,
   MagnifyingGlassIcon,
   GlobeAltIcon,
-  ChartBarIcon
+  ChartBarIcon,
+  ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline';
 
 export default function AdminDashboard() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    logout();
+    router.push('/auth');
+  };
 
   const adminSections = [
     {
@@ -68,18 +76,27 @@ export default function AdminDashboard() {
   };
 
   return (
-    <ProtectedRoute allowedRoles={['ADMIN']} redirectTo="/admin/login">
+    <ProtectedRoute allowedRoles={['ADMIN']} redirectTo="/auth">
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
         <div className="container mx-auto p-8">
-          {/* Header */}
-          <div className="mb-12">
-            <h1 className="text-5xl font-bold text-gray-800 mb-3">Admin Dashboard</h1>
-            <p className="text-xl text-gray-600">
-              Welcome back, <span className="font-semibold text-blue-600">{user?.username || 'Administrator'}</span>
-            </p>
-            <p className="text-sm text-gray-500 mt-2">
-              Manage timetables, exam seating, student results, and VTU scraping
-            </p>
+          {/* Header with Logout */}
+          <div className="mb-12 flex justify-between items-start">
+            <div>
+              <h1 className="text-5xl font-bold text-gray-800 mb-3">Admin Dashboard</h1>
+              <p className="text-xl text-gray-600">
+                Welcome back, <span className="font-semibold text-blue-600">{user?.username || 'Administrator'}</span>
+              </p>
+              <p className="text-sm text-gray-500 mt-2">
+                Manage timetables, exam seating, student results, and VTU scraping
+              </p>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors shadow-md hover:shadow-lg"
+            >
+              <ArrowRightOnRectangleIcon className="h-5 w-5" />
+              Logout
+            </button>
           </div>
 
           {/* Main Feature Cards */}
