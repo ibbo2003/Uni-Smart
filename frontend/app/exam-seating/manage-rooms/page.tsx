@@ -135,7 +135,7 @@ export default function ManageRoomsPage() {
   };
 
   return (
-    <ProtectedRoute allowedRoles={['ADMIN', 'FACULTY']}>
+    <ProtectedRoute allowedRoles={['ADMIN']}>
       <main className="container mx-auto p-8">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">

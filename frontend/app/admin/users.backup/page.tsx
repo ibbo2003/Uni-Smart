@@ -45,12 +45,41 @@ export default function UserManagement() {
     first_name: '',
     last_name: '',
     role: 'STUDENT' as 'ADMIN' | 'FACULTY' | 'STUDENT',
-    is_active: true
+    is_active: true,
+    // Student-specific fields
+    usn: '',
+    current_semester: 1,
+    batch: '',
+    // Faculty-specific fields
+    designation: '',
+    employee_id: '',
+    // Common field
+    department_code: ''
   });
+  const [departments, setDepartments] = useState<any[]>([]);
 
   useEffect(() => {
     fetchUsers();
+    fetchDepartments();
   }, []);
+
+  const fetchDepartments = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/departments/`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setDepartments(Array.isArray(data) ? data : (data.results || []));
+      }
+    } catch (error) {
+      console.error('Error fetching departments:', error);
+    }
+  };
 
   useEffect(() => {
     filterUsers();
@@ -110,13 +139,41 @@ export default function UserManagement() {
 
   const handleCreateUser = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/users/`, {
+      // Prepare payload based on role
+      const payload: any = {
+        email: formData.email,
+        password: formData.password,
+        role: formData.role,
+        name: `${formData.first_name} ${formData.last_name}`.trim(),
+        department_code: formData.department_code
+      };
+
+      // Add role-specific fields
+      if (formData.role === 'STUDENT') {
+        if (!formData.usn || !formData.batch) {
+          alert('USN and Batch are required for students');
+          return;
+        }
+        payload.usn = formData.usn;
+        payload.current_semester = formData.current_semester;
+        payload.batch = formData.batch;
+      } else if (formData.role === 'FACULTY') {
+        if (!formData.designation) {
+          alert('Designation is required for faculty');
+          return;
+        }
+        payload.designation = formData.designation;
+        if (formData.employee_id) {
+          payload.employee_id = formData.employee_id;
+        }
+      }
+
+      const response = await fetch(`${API_BASE_URL}/auth/register/`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
 
       if (response.ok) {
@@ -125,7 +182,7 @@ export default function UserManagement() {
         alert('User created successfully!');
       } else {
         const error = await response.json();
-        alert(`Failed to create user: ${JSON.stringify(error)}`);
+        alert(`Failed to create user: ${error.error || JSON.stringify(error)}`);
       }
     } catch (error) {
       console.error('Error creating user:', error);
@@ -224,7 +281,13 @@ export default function UserManagement() {
       first_name: '',
       last_name: '',
       role: 'STUDENT',
-      is_active: true
+      is_active: true,
+      usn: '',
+      current_semester: 1,
+      batch: '',
+      designation: '',
+      employee_id: '',
+      department_code: departments[0]?.code || ''
     });
     setShowModal(true);
   };
@@ -254,7 +317,13 @@ export default function UserManagement() {
       first_name: '',
       last_name: '',
       role: 'STUDENT',
-      is_active: true
+      is_active: true,
+      usn: '',
+      current_semester: 1,
+      batch: '',
+      designation: '',
+      employee_id: '',
+      department_code: ''
     });
   };
 
@@ -485,19 +554,6 @@ export default function UserManagement() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Username *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.username}
-                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Email *
                   </label>
                   <input
@@ -506,6 +562,20 @@ export default function UserManagement() {
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required
+                    placeholder={formData.role === 'STUDENT' ? '2ab22cs001@anjuman.edu.in' : 'john.smith@anjuman.edu.in'}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Password {modalMode === 'edit' && '(leave blank to keep current)'}
+                  </label>
+                  <input
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required={modalMode === 'create'}
                   />
                 </div>
 
@@ -537,25 +607,13 @@ export default function UserManagement() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Password {modalMode === 'edit' && '(leave blank to keep current)'}
-                  </label>
-                  <input
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required={modalMode === 'create'}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Role *
                   </label>
                   <select
                     value={formData.role}
                     onChange={(e) => setFormData({ ...formData, role: e.target.value as 'ADMIN' | 'FACULTY' | 'STUDENT' })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={modalMode === 'edit'}
                   >
                     <option value="STUDENT">Student</option>
                     <option value="FACULTY">Faculty</option>
@@ -563,18 +621,127 @@ export default function UserManagement() {
                   </select>
                 </div>
 
-                <div className="md:col-span-2">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={formData.is_active}
-                      onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Active User</span>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Department *
                   </label>
+                  <select
+                    value={formData.department_code}
+                    onChange={(e) => setFormData({ ...formData, department_code: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  >
+                    <option value="">Select Department</option>
+                    {departments.map((dept) => (
+                      <option key={dept.code} value={dept.code}>
+                        {dept.name} ({dept.code})
+                      </option>
+                    ))}
+                  </select>
                 </div>
+
+                {/* Student-specific fields */}
+                {formData.role === 'STUDENT' && modalMode === 'create' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        USN *
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.usn}
+                        onChange={(e) => setFormData({ ...formData, usn: e.target.value.toUpperCase() })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="2AB22CS001"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Current Semester *
+                      </label>
+                      <select
+                        value={formData.current_semester}
+                        onChange={(e) => setFormData({ ...formData, current_semester: parseInt(e.target.value) })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map((sem) => (
+                          <option key={sem} value={sem}>Semester {sem}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Batch (Year) *
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.batch}
+                        onChange={(e) => setFormData({ ...formData, batch: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="2022"
+                        required
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* Faculty-specific fields */}
+                {formData.role === 'FACULTY' && modalMode === 'create' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Designation *
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.designation}
+                        onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Professor / Assistant Professor"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Employee ID (optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.employee_id}
+                        onChange={(e) => setFormData({ ...formData, employee_id: e.target.value.toUpperCase() })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Auto-generated if not provided"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {modalMode === 'edit' && (
+                  <div className="md:col-span-2">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.is_active}
+                        onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Active User</span>
+                    </label>
+                  </div>
+                )}
               </div>
+
+              {modalMode === 'create' && (
+                <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-gray-700">
+                    <strong>Note:</strong> {formData.role === 'STUDENT' ? 'Student email must follow format: usn@anjuman.edu.in' : 'Faculty email must follow format: name@anjuman.edu.in'}
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="sticky bottom-0 bg-gray-50 px-6 py-4 flex justify-end gap-4 border-t border-gray-200">

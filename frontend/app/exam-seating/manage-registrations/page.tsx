@@ -236,7 +236,7 @@ export default function ManageRegistrationsPage() {
 
   if (!examId || !subjectCode) {
     return (
-      <ProtectedRoute allowedRoles={['ADMIN', 'FACULTY']}>
+      <ProtectedRoute allowedRoles={['ADMIN']}>
         <main className="container mx-auto p-8">
           <div className="bg-red-100 text-red-800 p-6 rounded-lg">
             <h2 className="text-xl font-bold mb-2">Error</h2>
@@ -251,7 +251,7 @@ export default function ManageRegistrationsPage() {
   }
 
   return (
-    <ProtectedRoute allowedRoles={['ADMIN', 'FACULTY']}>
+    <ProtectedRoute allowedRoles={['ADMIN']}>
       <main className="container mx-auto p-8">
       {/* Header */}
       <div className="mb-8">

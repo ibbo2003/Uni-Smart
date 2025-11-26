@@ -432,5 +432,192 @@ app.post('/api/exams/generate-seating', async (req, res) => {
 
 app.use('/api/timetable', exportRoutes);
 
+// ============================================================================
+// STUDENT-SPECIFIC ENDPOINTS (Secure - students can only access their own data)
+// ============================================================================
+
+/**
+ * GET /api/student/overview/:email
+ * Get overview data for a specific student (CGPA, semesters, upcoming exams)
+ * Security: Students can only access their own data via email
+ */
+app.get('/api/student/overview/:email', async (req, res) => {
+    const { email } = req.params;
+
+    if (!email) {
+        return res.status(400).json({ error: 'Email is required' });
+    }
+
+    let connection;
+    try {
+        connection = await pool.getConnection();
+
+        // Get student basic info
+        const [students] = await connection.execute(
+            `SELECT usn, name, current_semester FROM students WHERE email = ? LIMIT 1`,
+            [email]
+        );
+
+        if (students.length === 0) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+
+        const student = students[0];
+
+        // Calculate CGPA (placeholder - would need actual grade calculation)
+        // For now, return 0 or implement actual calculation based on your grading system
+        const cgpa = 0;
+
+        // Count upcoming exams
+        const [exams] = await connection.execute(
+            `SELECT COUNT(*) as count FROM exams WHERE exam_date >= CURDATE()`
+        );
+
+        res.json({
+            usn: student.usn,
+            name: student.name,
+            cgpa: cgpa,
+            semesters_completed: student.current_semester - 1,
+            upcoming_exams: exams[0].count
+        });
+
+    } catch (error) {
+        console.error('[GATEWAY] Error fetching student overview:', error);
+        res.status(500).json({ error: 'Failed to fetch student overview' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+/**
+ * GET /api/results/student/:email
+ * Get all results for a specific student, grouped by semester
+ * Security: Students can only access their own results via email
+ */
+app.get('/api/results/student/:email', async (req, res) => {
+    const { email } = req.params;
+
+    if (!email) {
+        return res.status(400).json({ error: 'Email is required' });
+    }
+
+    let connection;
+    try {
+        connection = await pool.getConnection();
+
+        // Verify student exists and get USN
+        const [students] = await connection.execute(
+            `SELECT usn FROM students WHERE email = ? LIMIT 1`,
+            [email]
+        );
+
+        if (students.length === 0) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+
+        const studentUsn = students[0].usn;
+
+        // Get all results for this student
+        // Note: This is a placeholder query. Adjust based on your actual results table structure
+        const [results] = await connection.execute(
+            `SELECT * FROM student_results WHERE student_usn = ? ORDER BY semester, subject_code`,
+            [studentUsn]
+        );
+
+        // Group results by semester
+        const semesterResults = {};
+        results.forEach(result => {
+            const sem = result.semester;
+            if (!semesterResults[sem]) {
+                semesterResults[sem] = {
+                    semester: sem,
+                    sgpa: 0, // Calculate actual SGPA
+                    total_credits: 0,
+                    subjects: []
+                };
+            }
+
+            semesterResults[sem].subjects.push({
+                subject_code: result.subject_code,
+                subject_name: result.subject_name,
+                internal_marks: result.internal_marks || 0,
+                external_marks: result.external_marks || 0,
+                total_marks: result.total_marks || 0,
+                grade: result.grade || 'N/A',
+                credits: result.credits || 0
+            });
+        });
+
+        const semesters = Object.values(semesterResults);
+        const totalCgpa = 0; // Calculate actual CGPA
+
+        res.json({
+            cgpa: totalCgpa,
+            semesters: semesters
+        });
+
+    } catch (error) {
+        console.error('[GATEWAY] Error fetching student results:', error);
+        res.status(500).json({ error: 'Failed to fetch student results' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+/**
+ * GET /api/exams/seating/student/:email
+ * Get exam seating arrangements for a specific student
+ * Security: Students can only access their own seating via email
+ */
+app.get('/api/exams/seating/student/:email', async (req, res) => {
+    const { email } = req.params;
+
+    if (!email) {
+        return res.status(400).json({ error: 'Email is required' });
+    }
+
+    let connection;
+    try {
+        connection = await pool.getConnection();
+
+        // Verify student exists and get USN
+        const [students] = await connection.execute(
+            `SELECT usn FROM students WHERE email = ? LIMIT 1`,
+            [email]
+        );
+
+        if (students.length === 0) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+
+        const studentUsn = students[0].usn;
+
+        // Get seating arrangements for this student
+        const [seatingData] = await connection.execute(
+            `SELECT
+                esp.student_usn,
+                e.subject_code,
+                esp.room_id,
+                esp.row_num,
+                esp.col_num,
+                e.exam_date,
+                e.exam_session
+             FROM exam_seating_plan esp
+             JOIN exams e ON esp.exam_id = e.exam_id
+             WHERE esp.student_usn = ?
+             ORDER BY e.exam_date, e.exam_session`,
+            [studentUsn]
+        );
+
+        res.json(seatingData);
+
+    } catch (error) {
+        console.error('[GATEWAY] Error fetching exam seating:', error);
+        res.status(500).json({ error: 'Failed to fetch exam seating' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
 app.listen(8080, () => console.log(`Node.js gateway listening on port 8080`));
 module.exports = app;

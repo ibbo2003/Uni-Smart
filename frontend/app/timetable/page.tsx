@@ -4,6 +4,18 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { RoleGuard } from "@/components/RoleGuard";
 import { useAuth } from "@/contexts/AuthContext";
 
+interface Faculty {
+  id: string;
+  employee_id: string;
+  name: string;
+  department: {
+    code: string;
+    name: string;
+  };
+  designation: string;
+  email: string;
+}
+
 interface SubjectInput {
   subject_code: string;
   subject_name: string;
@@ -378,11 +390,13 @@ const TimetableGrid = ({ timetableData }: { timetableData: TimeSlot[] }) => {
 };
 
 export default function TimetablePage() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [semester, setSemester] = useState("");
   const [section, setSection] = useState("");
   const [classroom, setClassroom] = useState("");
   const [subjects, setSubjects] = useState<SubjectInput[]>([]);
+  const [faculties, setFaculties] = useState<Faculty[]>([]);
+  const [loadingFaculties, setLoadingFaculties] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [availableTimetables, setAvailableTimetables] = useState<string[]>([]);
   const [selectedTimetable, setSelectedTimetable] = useState<string>("");
@@ -394,6 +408,37 @@ export default function TimetablePage() {
     generation_time?: number;
   } | null>(null);
   const timetableRef = useRef<HTMLDivElement>(null);
+
+  // Fetch faculties from API
+  useEffect(() => {
+    const fetchFaculties = async () => {
+      try {
+        const response = await fetch("http://localhost:8001/api/faculty/", {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          // Handle DRF pagination
+          const facultyList = Array.isArray(data) ? data : (data.results || []);
+          setFaculties(facultyList);
+        } else {
+          console.error("Failed to fetch faculties");
+        }
+      } catch (error) {
+        console.error("Error fetching faculties:", error);
+      } finally {
+        setLoadingFaculties(false);
+      }
+    };
+
+    if (token) {
+      fetchFaculties();
+    }
+  }, [token]);
 
   useEffect(() => {
     const fetchAvailable = async () => {
@@ -589,7 +634,7 @@ export default function TimetablePage() {
   };
 
   return (
-    <ProtectedRoute allowedRoles={['ADMIN', 'FACULTY', 'STUDENT']}>
+    <ProtectedRoute allowedRoles={['ADMIN']}>
       <main className="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="max-w-7xl mx-auto">
@@ -800,6 +845,43 @@ export default function TimetablePage() {
                   <h3 className="text-lg font-semibold text-gray-800">Subject Details</h3>
                 </div>
               </div>
+
+              {/* Faculty Info Box */}
+              {!loadingFaculties && faculties.length === 0 && (
+                <div className="mb-4 p-4 bg-amber-50 border-2 border-amber-300 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <svg className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div>
+                      <p className="font-semibold text-amber-800 mb-1">No Faculty Members Found</p>
+                      <p className="text-sm text-amber-700 mb-2">
+                        Before creating a timetable, you need to add faculty members to the system. Faculty data is required for assigning theory and lab instructors.
+                      </p>
+                      <a
+                        href="http://localhost:8001/admin/results/faculty/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-md hover:bg-amber-700 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Add Faculty via Django Admin
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!loadingFaculties && faculties.length > 0 && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                  <p className="text-sm text-blue-800">
+                    <strong>✓ {faculties.length} Faculty Members Loaded</strong> - Select theory and lab faculty from the dropdown menus below.
+                  </p>
+                </div>
+              )}
+
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200 border border-gray-200">
                   <thead className="bg-gray-100">
@@ -902,26 +984,42 @@ export default function TimetablePage() {
                           />
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <input
-                            type="text"
+                          <select
                             value={sub.theory_faculty}
                             onChange={(e) =>
                               handleSubjectChange(index, "theory_faculty", e.target.value)
                             }
-                            placeholder="F001"
-                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
-                          />
+                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                            disabled={loadingFaculties}
+                          >
+                            <option value="">
+                              {loadingFaculties ? "Loading faculties..." : "Select Theory Faculty"}
+                            </option>
+                            {faculties.map((faculty) => (
+                              <option key={faculty.id} value={faculty.employee_id}>
+                                {faculty.employee_id} - {faculty.name} ({faculty.department.code})
+                              </option>
+                            ))}
+                          </select>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <input
-                            type="text"
+                          <select
                             value={sub.lab_faculty}
                             onChange={(e) =>
                               handleSubjectChange(index, "lab_faculty", e.target.value)
                             }
-                            placeholder="F002"
-                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
-                          />
+                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                            disabled={loadingFaculties}
+                          >
+                            <option value="">
+                              {loadingFaculties ? "Loading faculties..." : "Select Lab Faculty"}
+                            </option>
+                            {faculties.map((faculty) => (
+                              <option key={faculty.id} value={faculty.employee_id}>
+                                {faculty.employee_id} - {faculty.name} ({faculty.department.code})
+                              </option>
+                            ))}
+                          </select>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <input

@@ -289,8 +289,20 @@ class StudentResultDetailSerializer(StudentResultSerializer):
     subject_details = SubjectSerializer(source='subject', read_only=True)
     student_details = StudentSerializer(source='student', read_only=True)
 
+    # Add passing criteria from subject
+    min_internal_marks = serializers.IntegerField(source='subject.min_internal_marks', read_only=True)
+    min_external_marks = serializers.IntegerField(source='subject.min_external_marks', read_only=True)
+    min_total_marks = serializers.IntegerField(source='subject.min_total_marks', read_only=True)
+    max_internal_marks = serializers.IntegerField(source='subject.max_internal_marks', read_only=True)
+    max_external_marks = serializers.IntegerField(source='subject.max_external_marks', read_only=True)
+    max_total_marks = serializers.IntegerField(source='subject.max_total_marks', read_only=True)
+
     class Meta(StudentResultSerializer.Meta):
-        fields = StudentResultSerializer.Meta.fields + ['subject_details', 'student_details']
+        fields = StudentResultSerializer.Meta.fields + [
+            'subject_details', 'student_details',
+            'min_internal_marks', 'min_external_marks', 'min_total_marks',
+            'max_internal_marks', 'max_external_marks', 'max_total_marks'
+        ]
 
 
 # ============================================================================

@@ -1,179 +1,72 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  ChartBarIcon,
   MagnifyingGlassIcon,
-  TrashIcon,
-  DocumentArrowDownIcon,
   AcademicCapIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-  ClockIcon,
-  ArrowPathIcon
+  ChartBarIcon,
+  XMarkIcon,
+  FunnelIcon
 } from '@heroicons/react/24/outline';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api';
 
-interface Department {
-  id: number;
-  name: string;
-  code: string;
-}
-
-interface Subject {
-  id: number;
-  name: string;
-  code: string;
-}
-
 interface Student {
-  id: number;
+  id: string;
   usn: string;
   name: string;
+  department: {
+    code: string;
+    name: string;
+  };
+  current_semester: number;
+  batch: string;
 }
 
-interface Result {
-  id: number;
-  student: number;
-  student_name?: string;
-  student_usn?: string;
-  subject: number;
-  subject_name?: string;
-  internal_marks?: number;
-  external_marks?: number;
-  total_marks?: number;
-  grade?: string;
+interface SubjectResult {
+  id: string;
+  subject: {
+    code: string;
+    name: string;
+  };
+  internal_marks: number;
+  external_marks: number;
+  total_marks: number;
+  result_status: string;
   semester: number;
-  exam_type: string;
-  pass_status: boolean;
-  created_at: string;
 }
 
-export default function ResultManagement() {
+interface StudentResult {
+  semester: number;
+  subjects: SubjectResult[];
+}
+
+export default function StudentResultsPage() {
   const { token } = useAuth();
-  const [results, setResults] = useState<Result[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [filteredResults, setFilteredResults] = useState<Result[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [semesterFilter, setSemesterFilter] = useState<string>('ALL');
-  const [passStatusFilter, setPassStatusFilter] = useState<string>('ALL');
-  const [examTypeFilter, setExamTypeFilter] = useState<string>('ALL');
+  const [loading, setLoading] = useState(true);
+
+  // Selected student and results
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [studentResults, setStudentResults] = useState<StudentResult[]>([]);
+  const [resultsLoading, setResultsLoading] = useState(false);
+  const [selectedSemester, setSelectedSemester] = useState<number | 'all'>('all');
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchStudents();
+  }, [token]);
 
   useEffect(() => {
-    filterResults();
-  }, [results, searchTerm, semesterFilter, passStatusFilter, examTypeFilter]);
+    filterStudents();
+  }, [students, searchTerm]);
 
-  const fetchData = async () => {
+  const fetchStudents = async () => {
     try {
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      };
-
-      const [resultsRes, studentsRes, subjectsRes, deptsRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/results/`, { headers }),
-        fetch(`${API_BASE_URL}/students/`, { headers }),
-        fetch(`${API_BASE_URL}/subjects/`, { headers }),
-        fetch(`${API_BASE_URL}/departments/`, { headers })
-      ]);
-
-      if (resultsRes.ok && studentsRes.ok && subjectsRes.ok && deptsRes.ok) {
-        const resultsData = await resultsRes.json();
-        const studentsData = await studentsRes.json();
-        const subjectsData = await subjectsRes.json();
-        const deptsData = await deptsRes.json();
-
-        // Handle DRF pagination - extract results array
-        const extractArray = (data: any) => {
-          if (Array.isArray(data)) {
-            return data;
-          } else if (data && data.results && Array.isArray(data.results)) {
-            return data.results;
-          }
-          return [];
-        };
-
-        const resultsArray = extractArray(resultsData);
-        const studentsArray = extractArray(studentsData);
-        const subjectsArray = extractArray(subjectsData);
-        const deptsArray = extractArray(deptsData);
-
-        setStudents(studentsArray);
-        setSubjects(subjectsArray);
-        setDepartments(deptsArray);
-
-        // Map student and subject names to results
-        const resultsWithNames = resultsArray.map((result: Result) => {
-          const student = studentsArray.find((s: Student) => s.id === result.student);
-          const subject = subjectsArray.find((s: Subject) => s.id === result.subject);
-          return {
-            ...result,
-            student_name: student?.name || 'Unknown',
-            student_usn: student?.usn || 'Unknown',
-            subject_name: subject?.name || 'Unknown'
-          };
-        });
-
-        setResults(resultsWithNames);
-      }
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filterResults = () => {
-    let filtered = [...results];
-
-    // Search filter
-    if (searchTerm) {
-      filtered = filtered.filter(result =>
-        result.student_usn?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        result.student_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        result.subject_name?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    // Semester filter
-    if (semesterFilter !== 'ALL') {
-      filtered = filtered.filter(result => result.semester === parseInt(semesterFilter));
-    }
-
-    // Pass status filter
-    if (passStatusFilter !== 'ALL') {
-      filtered = filtered.filter(result =>
-        passStatusFilter === 'PASS' ? result.pass_status : !result.pass_status
-      );
-    }
-
-    // Exam type filter
-    if (examTypeFilter !== 'ALL') {
-      filtered = filtered.filter(result => result.exam_type === examTypeFilter);
-    }
-
-    setFilteredResults(filtered);
-  };
-
-  const handleDeleteResult = async (resultId: number) => {
-    if (!confirm('Are you sure you want to delete this result? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/results/${resultId}/`, {
-        method: 'DELETE',
+      const response = await fetch(`${API_BASE_URL}/students/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -181,277 +74,353 @@ export default function ResultManagement() {
       });
 
       if (response.ok) {
-        await fetchData();
-        alert('Result deleted successfully!');
-      } else {
-        const error = await response.json();
-        alert(`Failed to delete result: ${JSON.stringify(error)}`);
+        const data = await response.json();
+        const studentList = Array.isArray(data) ? data : (data.results || []);
+        setStudents(studentList);
+        setFilteredStudents(studentList);
       }
     } catch (error) {
-      console.error('Error deleting result:', error);
-      alert('Failed to delete result');
+      console.error('Error fetching students:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getGradeBadgeColor = (grade?: string) => {
-    if (!grade) return 'bg-gray-100 text-gray-800';
-    switch (grade.toUpperCase()) {
-      case 'O':
-      case 'A+':
-        return 'bg-green-100 text-green-800';
-      case 'A':
-      case 'B+':
-        return 'bg-blue-100 text-blue-800';
-      case 'B':
-      case 'C':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'F':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+  const filterStudents = () => {
+    if (!searchTerm) {
+      setFilteredStudents(students);
+      return;
+    }
+
+    const filtered = students.filter(student =>
+      student.usn.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredStudents(filtered);
+  };
+
+  const fetchStudentResults = async (studentId: string) => {
+    setResultsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/results/?student=${studentId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const results = Array.isArray(data) ? data : (data.results || []);
+
+        // Group results by semester
+        const groupedResults = groupResultsBySemester(results);
+        setStudentResults(groupedResults);
+      }
+    } catch (error) {
+      console.error('Error fetching student results:', error);
+    } finally {
+      setResultsLoading(false);
     }
   };
 
-  // Calculate statistics
-  const totalResults = results.length;
-  const passedResults = results.filter(r => r.pass_status).length;
-  const failedResults = results.filter(r => !r.pass_status).length;
-  const passPercentage = totalResults > 0 ? ((passedResults / totalResults) * 100).toFixed(1) : '0';
-  const uniqueExamTypes = Array.from(new Set(results.map(r => r.exam_type).filter(Boolean)));
+  const groupResultsBySemester = (results: any[]): StudentResult[] => {
+    const semesterMap = new Map<number, SubjectResult[]>();
+
+    results.forEach(result => {
+      const semester = result.semester || 1;
+      if (!semesterMap.has(semester)) {
+        semesterMap.set(semester, []);
+      }
+      semesterMap.get(semester)?.push({
+        id: result.id,
+        subject: {
+          code: result.subject_code || 'N/A',
+          name: result.subject_name || 'Unknown'
+        },
+        internal_marks: result.internal_marks || 0,
+        external_marks: result.external_marks || 0,
+        total_marks: result.total_marks || 0,
+        result_status: result.result_status || 'P',
+        semester: semester
+      });
+    });
+
+    return Array.from(semesterMap.entries())
+      .map(([semester, subjects]) => ({
+        semester,
+        subjects
+      }))
+      .sort((a, b) => a.semester - b.semester);
+  };
+
+  const handleStudentClick = (student: Student) => {
+    setSelectedStudent(student);
+    setSelectedSemester('all');
+    fetchStudentResults(student.id);
+  };
+
+  const closeStudentView = () => {
+    setSelectedStudent(null);
+    setStudentResults([]);
+    setSelectedSemester('all');
+  };
+
+  const getFilteredResults = () => {
+    if (selectedSemester === 'all') {
+      return studentResults;
+    }
+    return studentResults.filter(r => r.semester === selectedSemester);
+  };
 
   return (
-    <ProtectedRoute allowedRoles={['ADMIN']} redirectTo="/admin/login">
+    <ProtectedRoute allowedRoles={['ADMIN']}>
       <div className="min-h-screen bg-gray-50">
         <div className="container mx-auto p-8">
           {/* Header */}
-          <div className="flex justify-between items-center mb-8">
-            <div>
-              <h1 className="text-4xl font-bold text-gray-800 mb-2">Result Management</h1>
-              <p className="text-gray-600">View and manage student examination results</p>
-            </div>
-            <Link href="/admin/scraper">
-              <button className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-600 to-teal-700 text-white rounded-lg hover:from-teal-700 hover:to-teal-800 transition-all shadow-lg font-semibold">
-                <ArrowPathIcon className="h-5 w-5" />
-                Scrape VTU Results
-              </button>
-            </Link>
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold text-gray-800 mb-2">Student Results</h1>
+            <p className="text-gray-600">View and analyze student examination results</p>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Total Results</p>
-                  <p className="text-3xl font-bold text-pink-600">{totalResults}</p>
+          {!selectedStudent ? (
+            <>
+              {/* Search Bar */}
+              <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                <div className="relative">
+                  <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-3 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search by USN or student name..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
                 </div>
-                <ChartBarIcon className="h-12 w-12 text-pink-600 opacity-20" />
-              </div>
-            </div>
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Passed</p>
-                  <p className="text-3xl font-bold text-green-600">{passedResults}</p>
-                </div>
-                <CheckCircleIcon className="h-12 w-12 text-green-600 opacity-20" />
-              </div>
-            </div>
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Failed</p>
-                  <p className="text-3xl font-bold text-red-600">{failedResults}</p>
-                </div>
-                <XCircleIcon className="h-12 w-12 text-red-600 opacity-20" />
-              </div>
-            </div>
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Pass Rate</p>
-                  <p className="text-3xl font-bold text-blue-600">{passPercentage}%</p>
-                </div>
-                <AcademicCapIcon className="h-12 w-12 text-blue-600 opacity-20" />
-              </div>
-            </div>
-          </div>
-
-          {/* Filters */}
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="relative">
-                <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-3 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search by USN, name, or subject..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                />
               </div>
 
-              <select
-                value={semesterFilter}
-                onChange={(e) => setSemesterFilter(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-              >
-                <option value="ALL">All Semesters</option>
-                {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => (
-                  <option key={sem} value={sem}>Semester {sem}</option>
-                ))}
-              </select>
-
-              <select
-                value={passStatusFilter}
-                onChange={(e) => setPassStatusFilter(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-              >
-                <option value="ALL">All Status</option>
-                <option value="PASS">Passed Only</option>
-                <option value="FAIL">Failed Only</option>
-              </select>
-
-              <select
-                value={examTypeFilter}
-                onChange={(e) => setExamTypeFilter(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-              >
-                <option value="ALL">All Exam Types</option>
-                {uniqueExamTypes.map(type => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Results Table */}
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            {loading ? (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-600 mx-auto"></div>
-                <p className="mt-4 text-gray-600">Loading results...</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Student
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Subject
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Internal
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        External
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Total
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Grade
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Exam Type
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredResults.length === 0 ? (
-                      <tr>
-                        <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
-                          No results found
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredResults.map((result) => (
-                        <tr key={result.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4">
-                            <div className="text-sm font-medium text-gray-900">{result.student_name}</div>
-                            <div className="text-sm text-gray-500">{result.student_usn}</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900">{result.subject_name}</div>
-                            <div className="text-sm text-gray-500">Sem {result.semester}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{result.internal_marks ?? '-'}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{result.external_marks ?? '-'}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-semibold text-gray-900">{result.total_marks ?? '-'}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getGradeBadgeColor(result.grade)}`}>
-                              {result.grade || 'N/A'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            {result.pass_status ? (
-                              <span className="flex items-center gap-1 text-green-600">
-                                <CheckCircleIcon className="h-5 w-5" />
-                                <span className="text-sm font-medium">Pass</span>
-                              </span>
-                            ) : (
-                              <span className="flex items-center gap-1 text-red-600">
-                                <XCircleIcon className="h-5 w-5" />
-                                <span className="text-sm font-medium">Fail</span>
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
-                              {result.exam_type}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button
-                              onClick={() => handleDeleteResult(result.id)}
-                              className="text-red-600 hover:text-red-900"
-                              title="Delete result"
-                            >
-                              <TrashIcon className="h-5 w-5" />
-                            </button>
-                          </td>
+              {/* Students List */}
+              <div className="bg-white rounded-lg shadow-md overflow-hidden">
+                {loading ? (
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Loading students...</p>
+                  </div>
+                ) : filteredStudents.length === 0 ? (
+                  <div className="text-center py-12">
+                    <AcademicCapIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">No students found</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            USN
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Student Name
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Department
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Current Semester
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Batch
+                          </th>
+                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredStudents.map((student) => (
+                          <tr key={student.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900">{student.usn}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center">
+                                <div className="h-10 w-10 flex-shrink-0">
+                                  <div className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold">
+                                    {student.name.charAt(0).toUpperCase()}
+                                  </div>
+                                </div>
+                                <div className="ml-4">
+                                  <div className="text-sm font-medium text-gray-900">{student.name}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
+                                {student.department.code}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              Semester {student.current_semester}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {student.batch}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                              <button
+                                onClick={() => handleStudentClick(student)}
+                                className="text-blue-600 hover:text-blue-900 font-medium flex items-center gap-2 ml-auto"
+                              >
+                                <ChartBarIcon className="h-5 w-5" />
+                                View Results
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          ) : (
+            <>
+              {/* Student Detail View */}
+              <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                <div className="flex justify-between items-start">
+                  <div className="flex items-start gap-4">
+                    <div className="h-16 w-16 rounded-full bg-blue-500 flex items-center justify-center text-white text-2xl font-semibold">
+                      {selectedStudent.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-800">{selectedStudent.name}</h2>
+                      <p className="text-gray-600">USN: {selectedStudent.usn}</p>
+                      <div className="flex gap-4 mt-2">
+                        <span className="text-sm text-gray-500">
+                          Department: <span className="font-medium">{selectedStudent.department.name}</span>
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          Batch: <span className="font-medium">{selectedStudent.batch}</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={closeStudentView}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <XMarkIcon className="h-6 w-6" />
+                  </button>
+                </div>
+              </div>
 
-          {/* Info Banner */}
-          <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-            <div className="flex items-start gap-4">
-              <ClockIcon className="h-6 w-6 text-blue-600 flex-shrink-0 mt-1" />
-              <div>
-                <h3 className="font-semibold text-gray-800 mb-2">📊 Result Analysis Features</h3>
-                <p className="text-gray-600 text-sm mb-3">
-                  For comprehensive result analysis, statistics, and visualizations, visit the Result Analysis section.
-                </p>
-                <a
-                  href="/result-analysis"
-                  className="inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                >
-                  Go to Result Analysis →
-                </a>
+              {/* Semester Filter */}
+              <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+                <div className="flex items-center gap-4">
+                  <FunnelIcon className="h-5 w-5 text-gray-500" />
+                  <span className="text-sm font-medium text-gray-700">Filter by Semester:</span>
+                  <select
+                    value={selectedSemester}
+                    onChange={(e) => setSelectedSemester(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="all">All Semesters</option>
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((sem) => (
+                      <option key={sem} value={sem}>Semester {sem}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            </div>
-          </div>
+
+              {/* Results by Semester */}
+              {resultsLoading ? (
+                <div className="bg-white rounded-lg shadow-md p-12 text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="mt-4 text-gray-600">Loading results...</p>
+                </div>
+              ) : getFilteredResults().length === 0 ? (
+                <div className="bg-white rounded-lg shadow-md p-12 text-center">
+                  <ChartBarIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600">No results found for this student</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {getFilteredResults().map((semesterResult) => (
+                    <div key={semesterResult.semester} className="bg-white rounded-lg shadow-md overflow-hidden">
+                      {/* Semester Header */}
+                      <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4">
+                        <div className="flex justify-between items-center text-white">
+                          <h3 className="text-xl font-bold">Semester {semesterResult.semester}</h3>
+                          <div className="text-center">
+                            <p className="text-sm opacity-90">Total Subjects</p>
+                            <p className="text-2xl font-bold">{semesterResult.subjects.length}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* VTU Passing Criteria Info */}
+                      <div className="bg-blue-50 border-b border-blue-100 px-6 py-3">
+                        <p className="text-xs text-blue-800">
+                          <span className="font-semibold">VTU CBCS 2015-16 Passing Criteria:</span> Regular subjects require ≥35% CIE (Internal), ≥35% SEE (External), AND ≥40% Total to pass. Grades and status shown are from official VTU results.
+                        </p>
+                      </div>
+
+                      {/* Subject Results */}
+                      <div className="p-6">
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full">
+                            <thead>
+                              <tr className="border-b">
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Subject Code</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Subject Name</th>
+                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Internal</th>
+                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">External</th>
+                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Total</th>
+                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Result</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                              {semesterResult.subjects.map((subject) => (
+                                <tr key={subject.id} className="hover:bg-gray-50">
+                                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{subject.subject.code}</td>
+                                  <td className="px-4 py-3 text-sm text-gray-700">{subject.subject.name}</td>
+                                  <td className="px-4 py-3 text-sm text-center">{subject.internal_marks}</td>
+                                  <td className="px-4 py-3 text-sm text-center">{subject.external_marks}</td>
+                                  <td className="px-4 py-3 text-sm text-center font-medium">{subject.total_marks}</td>
+                                  <td className="px-4 py-3 text-center">
+                                    {subject.result_status === 'P' ? (
+                                      <span className="text-sm font-semibold text-green-600">P</span>
+                                    ) : subject.result_status === 'F' ? (
+                                      <span className="text-sm font-semibold text-red-600">F</span>
+                                    ) : subject.result_status === 'A' ? (
+                                      <span className="text-sm font-semibold text-gray-600">A</span>
+                                    ) : subject.result_status === 'W' ? (
+                                      <span className="text-sm font-semibold text-yellow-600">W</span>
+                                    ) : (
+                                      <span className="text-sm font-semibold text-gray-600">{subject.result_status}</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Back Button */}
+              <div className="mt-6">
+                <button
+                  onClick={closeStudentView}
+                  className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  ← Back to Students List
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </ProtectedRoute>

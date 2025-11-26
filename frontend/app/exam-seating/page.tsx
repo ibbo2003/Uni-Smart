@@ -123,7 +123,7 @@ export default function ExamSeatingPage() {
   };
 
   return (
-    <ProtectedRoute allowedRoles={['ADMIN', 'FACULTY', 'STUDENT']}>
+    <ProtectedRoute allowedRoles={['ADMIN']}>
       <main className="container mx-auto p-8">
         {/* Page Header */}
         <div className="mb-10">

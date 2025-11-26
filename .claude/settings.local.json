@@ -3,7 +3,12 @@
     "allow": [
       "Bash(python3:*)",
       "Bash(npm run build:*)",
-      "Bash(python manage.py shell:*)"
+      "Bash(python manage.py shell:*)",
+      "Bash(for dir in departments faculty-assignments permissions results scraper settings students subjects vtu-settings)",
+      "Bash(do if [ -d \"$dir\" ])",
+      "Bash(then mv \"$dir\" \"$dir.backup\")",
+      "Bash(fi)",
+      "Bash(done)"
     ],
     "deny": [],
     "ask": []
