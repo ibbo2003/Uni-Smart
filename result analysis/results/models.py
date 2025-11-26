@@ -717,7 +717,12 @@ class StudentResult(models.Model):
         """
         Auto-calculate total marks, result status, grade, and grade point.
         Uses VTU CBCS 2015-16 pass/fail criteria.
+
+        Note: If preserve_result_status=True in kwargs, the existing result_status
+        from VTU portal will be preserved (used by scraper).
         """
+        preserve_result_status = kwargs.pop('preserve_result_status', False)
+
         # Calculate total marks
         self.total_marks = self.internal_marks + self.external_marks
 
@@ -726,27 +731,28 @@ class StudentResult(models.Model):
         max_external = self.subject.max_external_marks
         max_total = max_internal + max_external
 
-        # Pass/Fail Logic
-        if self.subject.subject_type in ['NON_CREDIT', 'AUDIT']:
-            # Non-Credit Mandatory & Audit: Pass if >= 35 marks
-            if self.total_marks >= 35:
-                self.result_status = 'P'
+        # Pass/Fail Logic - Only calculate if not preserving VTU's result
+        if not preserve_result_status:
+            if self.subject.subject_type in ['NON_CREDIT', 'AUDIT']:
+                # Non-Credit Mandatory & Audit: Pass if >= 35 marks
+                if self.total_marks >= 35:
+                    self.result_status = 'P'
+                else:
+                    self.result_status = 'F'
             else:
-                self.result_status = 'F'
-        else:
-            # Regular subjects: All three conditions must be met
-            min_internal = max_internal * 0.35
-            min_external = max_external * 0.35
-            min_total = max_total * 0.40
+                # Regular subjects: All three conditions must be met
+                min_internal = max_internal * 0.35
+                min_external = max_external * 0.35
+                min_total = max_total * 0.40
 
-            passes_internal = (max_internal == 0) or (self.internal_marks >= min_internal)
-            passes_external = (max_external == 0) or (self.external_marks >= min_external)
-            passes_total = self.total_marks >= min_total
+                passes_internal = (max_internal == 0) or (self.internal_marks >= min_internal)
+                passes_external = (max_external == 0) or (self.external_marks >= min_external)
+                passes_total = self.total_marks >= min_total
 
-            if passes_internal and passes_external and passes_total:
-                self.result_status = 'P'  # Pass
-            else:
-                self.result_status = 'F'  # Fail
+                if passes_internal and passes_external and passes_total:
+                    self.result_status = 'P'  # Pass
+                else:
+                    self.result_status = 'F'  # Fail
 
         # Calculate grade
         self.grade = self.calculate_grade()
@@ -1121,3 +1127,76 @@ class SystemSettings(models.Model):
             }
         )
         return setting
+
+
+# ============================================================================
+# VTU SEMESTER URL MANAGEMENT
+# ============================================================================
+
+class VTUSemesterURL(models.Model):
+    """
+    Stores semester-wise VTU result portal URLs.
+    Each semester in each academic year can have its own URL.
+
+    VTU publishes results with different URLs:
+    - Even semesters (2,4,6,8): June/July exams → JJEcbcs25 pattern
+    - Odd semesters (1,3,5,7): Dec/Jan exams → DJcbcs25 pattern
+    """
+
+    SEMESTER_CHOICES = [(i, f'Semester {i}') for i in range(1, 9)]
+
+    semester = models.IntegerField(
+        choices=SEMESTER_CHOICES,
+        help_text="Which semester this URL is for (1-8)"
+    )
+    academic_year = models.CharField(
+        max_length=10,
+        help_text="Academic year (e.g., 2024-25)"
+    )
+    url = models.URLField(
+        max_length=500,
+        help_text="VTU result portal URL for this semester"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this URL is currently active",
+        db_index=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='vtu_url_updates',
+        help_text="Admin who last updated this URL"
+    )
+
+    class Meta:
+        unique_together = ['semester', 'academic_year']
+        ordering = ['-academic_year', '-semester']
+        verbose_name = 'VTU Semester URL'
+        verbose_name_plural = 'VTU Semester URLs'
+        indexes = [
+            models.Index(fields=['semester', 'academic_year', 'is_active']),
+            models.Index(fields=['is_active', '-updated_at']),
+        ]
+
+    def __str__(self):
+        return f"Sem {self.semester} - {self.academic_year} - {self.get_url_type()}"
+
+    def get_url_type(self):
+        """Return whether this is an odd or even semester URL."""
+        return "Even (June/July)" if self.semester % 2 == 0 else "Odd (Dec/Jan)"
+
+    def clean(self):
+        """Validate URL format."""
+        if not self.url.startswith('https://'):
+            raise ValidationError('URL must start with https://')
+        if 'vtu.ac.in' not in self.url:
+            raise ValidationError('URL must be a VTU domain (vtu.ac.in)')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)

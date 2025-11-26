@@ -19,7 +19,7 @@ from .models import (
     User, Department, Subject, SemesterSubject,
     Student, Faculty, FacultySubjectAssignment,
     ExamSchedule, StudentResult,  # ResultAnalytics removed - using real-time analytics
-    ScrapeLog, AuditLog, SystemSettings
+    ScrapeLog, AuditLog, SystemSettings, VTUSemesterURL
 )
 from .serializers import (
     UserSerializer, UserCreateSerializer, DepartmentSerializer,
@@ -29,7 +29,7 @@ from .serializers import (
     # ResultAnalyticsSerializer removed - using real-time analytics
     ScrapeLogSerializer, AuditLogSerializer,
     ScrapeRequestSerializer, DashboardStatsSerializer, PasswordChangeSerializer,
-    SemesterResultsSerializer
+    SemesterResultsSerializer, VTUSemesterURLSerializer
 )
 from .permissions import (
     IsAdmin, IsFaculty, IsStudent, IsAdminOrFaculty,
@@ -767,7 +767,14 @@ class ScraperViewSet(viewsets.ViewSet):
     def scrape(self, request):
         """
         Scrape results for one or multiple USNs.
-        Body: {"usn": "2AB22CS008"} or {"usn_list": ["2AB22CS008", "2AB22CS009"]}
+
+        Body:
+        {
+            "usn": "2AB22CS008",  // or "usn_list": ["2AB22CS008", "2AB22CS009"]
+            "semester": 6,        // Required: Which semester to scrape
+            "academic_year": "2024-25",  // Required: Academic year
+            "vtu_url": "https://results.vtu.ac.in/JJEcbcs25/index.php"  // Required: VTU portal URL
+        }
         """
         serializer = ScrapeRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -775,14 +782,44 @@ class ScraperViewSet(viewsets.ViewSet):
         usn = serializer.validated_data.get('usn')
         usn_list = serializer.validated_data.get('usn_list')
 
+        # Get scraper configuration from request
+        semester = request.data.get('semester')
+        academic_year = request.data.get('academic_year')
+        vtu_url = request.data.get('vtu_url')
+
+        # Validate required configuration
+        if not all([semester, academic_year, vtu_url]):
+            return Response(
+                {
+                    'error': 'Missing required configuration',
+                    'details': 'semester, academic_year, and vtu_url are required'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
             if usn:
                 # Single USN scrape
-                result = scrape_single_usn(usn, request.user, headless=True)
+                result = scrape_single_usn(
+                    usn,
+                    request.user,
+                    headless=True,
+                    semester=semester,
+                    academic_year=academic_year,
+                    vtu_url=vtu_url
+                )
                 return Response(result, status=status.HTTP_200_OK)
             else:
                 # Batch scrape
-                result = scrape_batch_usns(usn_list, request.user, headless=True, delay_seconds=3)
+                result = scrape_batch_usns(
+                    usn_list,
+                    request.user,
+                    headless=True,
+                    delay_seconds=3,
+                    semester=semester,
+                    academic_year=academic_year,
+                    vtu_url=vtu_url
+                )
                 return Response(result, status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -1269,3 +1306,202 @@ def update_vtu_link(request):
         'url': new_url,
         'updated_by': request.user.username
     }, status=status.HTTP_200_OK)
+
+
+# ============================================================================
+# VTU SEMESTER URL VIEWSET
+# ============================================================================
+
+import logging
+import datetime
+
+logger = logging.getLogger(__name__)
+
+
+class VTUSemesterURLViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing semester-wise VTU result URLs.
+
+    Endpoints:
+    - GET /api/vtu-semester-urls/ - List all semester URLs
+    - POST /api/vtu-semester-urls/ - Create a new semester URL
+    - GET /api/vtu-semester-urls/{id}/ - Get specific URL
+    - PUT/PATCH /api/vtu-semester-urls/{id}/ - Update URL
+    - DELETE /api/vtu-semester-urls/{id}/ - Delete URL
+    - POST /api/vtu-semester-urls/bulk-update/ - Bulk update URLs
+    - GET /api/vtu-semester-urls/get-for-student/?usn=XXX - Get URL for student
+    """
+
+    queryset = VTUSemesterURL.objects.all()
+    serializer_class = VTUSemesterURLSerializer
+    permission_classes = [IsAdminUser]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['semester', 'academic_year', 'is_active']
+    search_fields = ['academic_year', 'url']
+    ordering_fields = ['semester', 'academic_year', 'updated_at']
+    ordering = ['-academic_year', '-semester']
+
+    def perform_create(self, serializer):
+        """Set updated_by on creation."""
+        serializer.save(updated_by=self.request.user)
+
+    def perform_update(self, serializer):
+        """Set updated_by on update."""
+        serializer.save(updated_by=self.request.user)
+
+    @action(detail=False, methods=['post'], url_path='bulk-update')
+    def bulk_update(self, request):
+        """
+        Bulk update URLs for multiple semesters in an academic year.
+
+        POST /api/vtu-semester-urls/bulk-update/
+        {
+            "academic_year": "2024-25",
+            "url": "https://results.vtu.ac.in/JJEcbcs25/index.php",
+            "semesters": [2, 4, 6, 8]
+        }
+        """
+        academic_year = request.data.get('academic_year')
+        url = request.data.get('url')
+        semesters = request.data.get('semesters', [])
+
+        if not academic_year or not url:
+            return Response(
+                {'error': 'academic_year and url are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not semesters:
+            return Response(
+                {'error': 'semesters list cannot be empty'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate semesters are in range 1-8
+        if not all(1 <= sem <= 8 for sem in semesters):
+            return Response(
+                {'error': 'All semesters must be between 1 and 8'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        created_count = 0
+        updated_count = 0
+        results = []
+
+        for semester in semesters:
+            obj, created = VTUSemesterURL.objects.update_or_create(
+                semester=semester,
+                academic_year=academic_year,
+                defaults={
+                    'url': url,
+                    'is_active': True,
+                    'updated_by': request.user
+                }
+            )
+
+            if created:
+                created_count += 1
+            else:
+                updated_count += 1
+
+            results.append({
+                'semester': semester,
+                'academic_year': academic_year,
+                'url': url,
+                'action': 'created' if created else 'updated'
+            })
+
+        logger.info(
+            f"Bulk URL update by {request.user.username}: "
+            f"{created_count} created, {updated_count} updated for {academic_year}"
+        )
+
+        return Response({
+            'message': 'URLs updated successfully',
+            'created': created_count,
+            'updated': updated_count,
+            'results': results
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path='get-for-student')
+    def get_for_student(self, request):
+        """
+        Get the appropriate VTU URL for a student.
+
+        GET /api/vtu-semester-urls/get-for-student/?usn=2AB22CS019
+        """
+        usn = request.query_params.get('usn')
+
+        if not usn:
+            return Response(
+                {'error': 'usn parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            student = Student.objects.get(usn=usn)
+            semester = student.current_semester
+            academic_year = get_current_academic_year(student)
+
+            # Try to get semester-specific URL
+            url_config = VTUSemesterURL.objects.filter(
+                semester=semester,
+                academic_year=academic_year,
+                is_active=True
+            ).first()
+
+            if url_config:
+                return Response({
+                    'usn': usn,
+                    'semester': semester,
+                    'academic_year': academic_year,
+                    'url': url_config.url,
+                    'source': 'semester_specific'
+                })
+
+            # Fallback to most recent active URL
+            fallback = VTUSemesterURL.objects.filter(is_active=True).first()
+            if fallback:
+                return Response({
+                    'usn': usn,
+                    'semester': semester,
+                    'academic_year': academic_year,
+                    'url': fallback.url,
+                    'source': 'fallback',
+                    'warning': 'No semester-specific URL found, using fallback'
+                })
+
+            return Response(
+                {'error': 'No VTU URLs configured'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except Student.DoesNotExist:
+            return Response(
+                {'error': f'Student {usn} not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+def get_current_academic_year(student):
+    """
+    Calculate current academic year based on student's admission year and semester.
+
+    Example:
+    - 2022 admission + Sem 6 = 2024-25 academic year
+    - 2023 admission + Sem 4 = 2024-25 academic year
+    - 2024 admission + Sem 2 = 2024-25 academic year
+    """
+    # Years since admission (0-indexed)
+    years_since_admission = (student.current_semester - 1) // 2
+
+    # Calculate which academic year they're in
+    current_date = datetime.date.today()
+
+    if current_date.month >= 6:  # June onwards = new academic year
+        start_year = student.admission_year + years_since_admission
+    else:  # Jan-May = second half of academic year
+        start_year = student.admission_year + years_since_admission
+
+    end_year = start_year + 1
+    return f"{start_year}-{str(end_year)[2:]}"

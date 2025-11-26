@@ -17,6 +17,7 @@ from .views import (
     UserViewSet, DepartmentViewSet, SubjectViewSet,
     StudentViewSet, FacultyViewSet, FacultySubjectAssignmentViewSet,
     StudentResultViewSet, ScraperViewSet, AnalyticsViewSet, ExamScheduleViewSet,
+    VTUSemesterURLViewSet,
     # Real-time analytics views
     subject_analytics_view, batch_analytics_view,
     department_overview_view, student_comparison_view
@@ -35,6 +36,7 @@ router.register(r'results', StudentResultViewSet, basename='result')
 router.register(r'scraper', ScraperViewSet, basename='scraper')
 router.register(r'analytics', AnalyticsViewSet, basename='analytics')
 router.register(r'exams', ExamScheduleViewSet, basename='exam')
+router.register(r'vtu-semester-urls', VTUSemesterURLViewSet, basename='vtu-semester-url')
 
 # URL patterns
 urlpatterns = [

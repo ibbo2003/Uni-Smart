@@ -41,17 +41,20 @@ class VTUResultScraper:
     Based on proven working implementation
     """
 
-    def __init__(self, headless: bool = True, max_captcha_attempts: int = 5):
+    def __init__(self, headless: bool = True, max_captcha_attempts: int = 5, vtu_url: Optional[str] = None):
         self.headless = headless
         self.max_captcha_attempts = max_captcha_attempts
         self.driver = None
         self.ocr_reader = None
 
-        # Get VTU URL from database settings
-        self.VTU_RESULTS_URL = SystemSettings.get_setting(
-            'VTU_RESULTS_URL',
-            default='https://results.vtu.ac.in/JJEcbcs25/index.php'
-        )
+        # Use provided VTU URL or get from database settings
+        if vtu_url:
+            self.VTU_RESULTS_URL = vtu_url
+        else:
+            self.VTU_RESULTS_URL = SystemSettings.get_setting(
+                'VTU_RESULTS_URL',
+                default='https://results.vtu.ac.in/JJEcbcs25/index.php'
+            )
 
         logger.info(f"Initializing VTU Result Scraper with URL: {self.VTU_RESULTS_URL}")
     
@@ -335,26 +338,29 @@ class VTUResultScraper:
             return None
     
     @transaction.atomic
-    def _save_to_database(self, result_data: Dict, initiated_by: User) -> Tuple[int, int]:
+    def _save_to_database(self, result_data: Dict, initiated_by: User, semester: Optional[int] = None, academic_year: Optional[str] = None) -> Tuple[int, int]:
         """
         Save scraped results to database
-        
+
         Args:
             result_data: Parsed result data
             initiated_by: User who initiated scrape
-            
+            semester: Override semester (if provided, else use from result_data)
+            academic_year: Academic year metadata
+
         Returns:
             Tuple of (records_created, records_updated)
         """
-        logger.info("Saving results to database...")
-        
+        logger.info(f"Saving results to database (Semester: {semester}, Academic Year: {academic_year})...")
+
         records_created = 0
         records_updated = 0
-        
+
         try:
             usn = result_data['usn']
             student_name = result_data['student_name']
-            semester = result_data['semester']
+            # Use provided semester or fallback to parsed semester
+            semester = semester if semester is not None else result_data.get('semester')
             
             # Extract department code from USN (e.g., 2AB22CS008 -> CS)
             dept_code = usn[5:7] if len(usn) >= 7 else "XX"
@@ -545,42 +551,44 @@ class VTUResultScraper:
             logger.error(f"Database save failed: {e}")
             raise VTUScraperException(f"Database save failed: {e}")
     
-    def scrape_result(self, usn: str, initiated_by: User) -> Dict:
+    def scrape_result(self, usn: str, initiated_by: User, semester: Optional[int] = None, academic_year: Optional[str] = None) -> Dict:
         """
         Main scrape method for single USN
-        
+
         Args:
             usn: University Seat Number
             initiated_by: User who initiated scrape
-            
+            semester: Semester being scraped (for metadata)
+            academic_year: Academic year (for metadata)
+
         Returns:
             Dictionary with scrape results
         """
         start_time = time.time()
         scrape_log = None
-        
+
         try:
-            logger.info(f"Starting scrape for USN: {usn}")
-            
+            logger.info(f"Starting scrape for USN: {usn} (Semester: {semester}, Academic Year: {academic_year})")
+
             # Navigate to VTU portal
             self.driver.get(self.VTU_RESULTS_URL)
             logger.info(f"Navigated to {self.VTU_RESULTS_URL}")
             time.sleep(2)
-            
+
             # Solve CAPTCHA and login
             login_success = self._solve_captcha_and_login(usn)
-            
+
             if not login_success:
                 raise VTUScraperException("Failed to solve CAPTCHA and login")
-            
+
             # Parse results
             result_data = self._parse_result_page()
-            
+
             if not result_data:
                 raise VTUScraperException("No results found on page")
-            
-            # Save to database
-            records_created, records_updated = self._save_to_database(result_data, initiated_by)
+
+            # Save to database (pass semester and academic_year for metadata)
+            records_created, records_updated = self._save_to_database(result_data, initiated_by, semester=semester, academic_year=academic_year)
             
             execution_time = time.time() - start_time
             
@@ -651,34 +659,37 @@ class VTUResultScraper:
                 'log_id': str(scrape_log.id) if scrape_log else None
             }
     
-    def scrape_batch(self, usn_list: List[str], initiated_by: User) -> Dict:
+    def scrape_batch(self, usn_list: List[str], initiated_by: User, delay_seconds: int = 2, semester: Optional[int] = None, academic_year: Optional[str] = None) -> Dict:
         """
         Scrape results for multiple USNs
-        
+
         Args:
             usn_list: List of USNs
             initiated_by: User who initiated scrape
-            
+            delay_seconds: Delay between requests
+            semester: Semester being scraped
+            academic_year: Academic year
+
         Returns:
             Batch scrape statistics
         """
-        logger.info(f"Starting batch scrape for {len(usn_list)} USNs")
-        
+        logger.info(f"Starting batch scrape for {len(usn_list)} USNs (Semester: {semester}, Academic Year: {academic_year})")
+
         results = []
         successful = 0
         failed = 0
-        
+
         for usn in usn_list:
-            result = self.scrape_result(usn, initiated_by)
+            result = self.scrape_result(usn, initiated_by, semester=semester, academic_year=academic_year)
             results.append(result)
-            
+
             if result['success']:
                 successful += 1
             else:
                 failed += 1
-            
+
             # Delay between requests
-            time.sleep(2)
+            time.sleep(delay_seconds)
         
         logger.info(f"Batch scrape complete: {successful} successful, {failed} failed")
         
@@ -700,7 +711,14 @@ class VTUResultScraper:
 
 
 # Convenience functions
-def scrape_single_usn(usn: str, initiated_by: User, headless: bool = True) -> Dict:
+def scrape_single_usn(
+    usn: str,
+    initiated_by: User,
+    headless: bool = True,
+    semester: Optional[int] = None,
+    academic_year: Optional[str] = None,
+    vtu_url: Optional[str] = None
+) -> Dict:
     """
     Convenience function to scrape a single USN.
 
@@ -708,15 +726,26 @@ def scrape_single_usn(usn: str, initiated_by: User, headless: bool = True) -> Di
         usn: University Seat Number
         initiated_by: User who initiated the scrape
         headless: Run browser in headless mode
+        semester: Semester being scraped (optional, for metadata)
+        academic_year: Academic year (optional, for metadata)
+        vtu_url: VTU portal URL to use (optional, defaults to system setting)
 
     Returns:
         Dictionary with scrape results
     """
-    with VTUResultScraper(headless=headless) as scraper:
-        return scraper.scrape_result(usn, initiated_by)
+    with VTUResultScraper(headless=headless, vtu_url=vtu_url) as scraper:
+        return scraper.scrape_result(usn, initiated_by, semester=semester, academic_year=academic_year)
 
 
-def scrape_batch_usns(usn_list: List[str], initiated_by: User, headless: bool = True) -> Dict:
+def scrape_batch_usns(
+    usn_list: List[str],
+    initiated_by: User,
+    headless: bool = True,
+    delay_seconds: int = 3,
+    semester: Optional[int] = None,
+    academic_year: Optional[str] = None,
+    vtu_url: Optional[str] = None
+) -> Dict:
     """
     Convenience function to scrape multiple USNs.
 
@@ -724,9 +753,13 @@ def scrape_batch_usns(usn_list: List[str], initiated_by: User, headless: bool = 
         usn_list: List of University Seat Numbers
         initiated_by: User who initiated the scrape
         headless: Run browser in headless mode
+        delay_seconds: Delay between scrapes
+        semester: Semester being scraped (optional, for metadata)
+        academic_year: Academic year (optional, for metadata)
+        vtu_url: VTU portal URL to use (optional, defaults to system setting)
 
     Returns:
         Dictionary with batch scrape results
     """
-    with VTUResultScraper(headless=headless) as scraper:
-        return scraper.scrape_batch(usn_list, initiated_by)
+    with VTUResultScraper(headless=headless, vtu_url=vtu_url) as scraper:
+        return scraper.scrape_batch(usn_list, initiated_by, delay_seconds=delay_seconds, semester=semester, academic_year=academic_year)

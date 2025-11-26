@@ -217,7 +217,7 @@ export default function ResultManagement() {
   const passedResults = results.filter(r => r.pass_status).length;
   const failedResults = results.filter(r => !r.pass_status).length;
   const passPercentage = totalResults > 0 ? ((passedResults / totalResults) * 100).toFixed(1) : '0';
-  const uniqueExamTypes = Array.from(new Set(results.map(r => r.exam_type)));
+  const uniqueExamTypes = Array.from(new Set(results.map(r => r.exam_type).filter(Boolean)));
 
   return (
     <ProtectedRoute allowedRoles={['ADMIN']} redirectTo="/admin/login">

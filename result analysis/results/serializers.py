@@ -13,7 +13,7 @@ from .models import (
     User, Department, Subject, SemesterSubject,
     Student, Faculty, FacultySubjectAssignment,
     ExamSchedule, StudentResult,  # ResultAnalytics removed - using real-time analytics
-    ScrapeLog, AuditLog
+    ScrapeLog, AuditLog, VTUSemesterURL
 )
 
 
@@ -261,6 +261,7 @@ class StudentResultSerializer(serializers.ModelSerializer):
     subject_code = serializers.CharField(source='subject.code', read_only=True)
     subject_name = serializers.CharField(source='subject.name', read_only=True)
     percentage = serializers.SerializerMethodField()
+    pass_status = serializers.SerializerMethodField()
 
     class Meta:
         model = StudentResult
@@ -268,7 +269,7 @@ class StudentResultSerializer(serializers.ModelSerializer):
             'id', 'student', 'student_usn', 'student_name',
             'subject', 'subject_code', 'subject_name',
             'exam_schedule', 'semester', 'internal_marks',
-            'external_marks', 'total_marks', 'result_status',
+            'external_marks', 'total_marks', 'result_status', 'pass_status',
             'grade', 'grade_point', 'percentage', 'is_latest',
             'attempt_number', 'announced_date', 'scraped_at', 'updated_at'
         ]
@@ -276,6 +277,10 @@ class StudentResultSerializer(serializers.ModelSerializer):
 
     def get_percentage(self, obj):
         return float(obj.get_percentage())
+
+    def get_pass_status(self, obj):
+        """Convert result_status 'P'/'F' to boolean."""
+        return obj.result_status == 'P'
 
 
 class StudentResultDetailSerializer(StudentResultSerializer):
@@ -427,3 +432,30 @@ class SemesterResultsSerializer(serializers.Serializer):
     passed_subjects = serializers.IntegerField()
     failed_subjects = serializers.IntegerField()
     results = StudentResultSerializer(many=True)
+
+
+# ============================================================================
+# VTU SEMESTER URL SERIALIZERS
+# ============================================================================
+
+class VTUSemesterURLSerializer(serializers.ModelSerializer):
+    """
+    Serializer for VTU semester-wise result portal URLs.
+    Handles CRUD operations for semester URL configuration.
+    """
+
+    updated_by_username = serializers.CharField(source='updated_by.username', read_only=True)
+    url_type = serializers.SerializerMethodField()
+
+    class Meta:
+        model = VTUSemesterURL
+        fields = [
+            'id', 'semester', 'academic_year', 'url', 'is_active',
+            'created_at', 'updated_at', 'updated_by', 'updated_by_username',
+            'url_type'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'updated_by']
+
+    def get_url_type(self, obj):
+        """Return URL type (even/odd semester)."""
+        return obj.get_url_type()

@@ -64,6 +64,11 @@ export default function ScraperPage() {
   const [batchResult, setBatchResult] = useState<BatchResult | null>(null);
   const [batchProgress, setBatchProgress] = useState<ScrapeResult[]>([]);
 
+  // Scraper configuration state
+  const [selectedSemester, setSelectedSemester] = useState<number>(6);
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState('2024-25');
+  const [vtuURL, setVtuURL] = useState('');
+
   // Logs state
   const [logs, setLogs] = useState<ScrapeLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
@@ -92,6 +97,39 @@ export default function ScraperPage() {
     fetchLogs();
     calculateStats();
   }, [token, user, router]);
+
+  // Fetch VTU URL when semester or academic year changes
+  useEffect(() => {
+    if (token && selectedSemester && selectedAcademicYear) {
+      fetchVTUURL();
+    }
+  }, [selectedSemester, selectedAcademicYear, token]);
+
+  const fetchVTUURL = async () => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/vtu-semester-urls/?semester=${selectedSemester}&academic_year=${selectedAcademicYear}&is_active=true`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const results = Array.isArray(data) ? data : data.results || [];
+        if (results.length > 0) {
+          setVtuURL(results[0].url);
+        } else {
+          setVtuURL('');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch VTU URL:', error);
+    }
+  };
 
   const fetchLogs = async () => {
     setLogsLoading(true);
@@ -165,6 +203,11 @@ export default function ScraperPage() {
       return;
     }
 
+    if (!vtuURL) {
+      alert(`No VTU URL configured for Semester ${selectedSemester}, Academic Year ${selectedAcademicYear}. Please configure it in VTU Settings.`);
+      return;
+    }
+
     setSingleLoading(true);
     setSingleResult(null);
 
@@ -175,7 +218,12 @@ export default function ScraperPage() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ usn: singleUSN.toUpperCase().trim() })
+        body: JSON.stringify({
+          usn: singleUSN.toUpperCase().trim(),
+          semester: selectedSemester,
+          academic_year: selectedAcademicYear,
+          vtu_url: vtuURL
+        })
       });
 
       const data = await response.json();
@@ -215,6 +263,11 @@ export default function ScraperPage() {
       return;
     }
 
+    if (!vtuURL) {
+      alert(`No VTU URL configured for Semester ${selectedSemester}, Academic Year ${selectedAcademicYear}. Please configure it in VTU Settings.`);
+      return;
+    }
+
     setBatchLoading(true);
     setBatchResult(null);
     setBatchProgress([]);
@@ -226,7 +279,12 @@ export default function ScraperPage() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ usn_list: usnList })
+        body: JSON.stringify({
+          usn_list: usnList,
+          semester: selectedSemester,
+          academic_year: selectedAcademicYear,
+          vtu_url: vtuURL
+        })
       });
 
       const data = await response.json();
@@ -310,6 +368,82 @@ export default function ScraperPage() {
           </div>
         </div>
 
+        {/* Scraper Configuration */}
+        <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl shadow-lg p-6 mb-8 text-white">
+          <div className="flex items-start gap-4 mb-4">
+            <ExclamationTriangleIcon className="w-8 h-8 flex-shrink-0 mt-1" />
+            <div>
+              <h2 className="text-2xl font-bold mb-2">Scraper Configuration</h2>
+              <p className="text-indigo-100 text-sm">
+                Select the semester and academic year for scraping. The system will automatically use the configured VTU URL for this combination.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+            {/* Semester Selection */}
+            <div>
+              <label className="block text-sm font-semibold mb-2">Semester</label>
+              <select
+                value={selectedSemester}
+                onChange={(e) => setSelectedSemester(parseInt(e.target.value))}
+                className="w-full px-4 py-3 border-2 border-white/30 bg-white/10 backdrop-blur-sm rounded-lg text-white font-semibold focus:ring-2 focus:ring-white/50 focus:border-white/50"
+              >
+                {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => (
+                  <option key={sem} value={sem} className="text-gray-900">
+                    Semester {sem} {sem % 2 === 0 ? '(Even - June/July)' : '(Odd - Dec/Jan)'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Academic Year Selection */}
+            <div>
+              <label className="block text-sm font-semibold mb-2">Academic Year</label>
+              <select
+                value={selectedAcademicYear}
+                onChange={(e) => setSelectedAcademicYear(e.target.value)}
+                className="w-full px-4 py-3 border-2 border-white/30 bg-white/10 backdrop-blur-sm rounded-lg text-white font-semibold focus:ring-2 focus:ring-white/50 focus:border-white/50"
+              >
+                <option value="2023-24" className="text-gray-900">2023-24</option>
+                <option value="2024-25" className="text-gray-900">2024-25</option>
+                <option value="2025-26" className="text-gray-900">2025-26</option>
+                <option value="2026-27" className="text-gray-900">2026-27</option>
+              </select>
+            </div>
+
+            {/* VTU URL Display */}
+            <div>
+              <label className="block text-sm font-semibold mb-2">Configured VTU URL</label>
+              <div className="px-4 py-3 bg-white/20 backdrop-blur-sm rounded-lg border-2 border-white/30 flex items-center gap-2">
+                {vtuURL ? (
+                  <>
+                    <CheckCircleIcon className="w-5 h-5 text-green-300 flex-shrink-0" />
+                    <span className="text-xs font-mono truncate" title={vtuURL}>
+                      {vtuURL.replace('https://results.vtu.ac.in/', '')}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <XCircleIcon className="w-5 h-5 text-red-300 flex-shrink-0" />
+                    <span className="text-xs">Not configured</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {!vtuURL && (
+            <div className="mt-4 p-3 bg-yellow-500/20 border-2 border-yellow-300/30 rounded-lg flex items-start gap-3">
+              <ExclamationTriangleIcon className="w-5 h-5 text-yellow-300 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-yellow-100">
+                No URL configured for <strong>Semester {selectedSemester}</strong> and <strong>{selectedAcademicYear}</strong>.
+                Please configure it in <a href="/admin/vtu-settings" className="underline font-semibold hover:text-white">VTU Settings</a> before scraping.
+              </p>
+            </div>
+          )}
+        </div>
+
         {/* Scrape Forms */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* Single USN Scrape */}
@@ -326,7 +460,7 @@ export default function ScraperPage() {
                   type="text"
                   value={singleUSN}
                   onChange={(e) => setSingleUSN(e.target.value.toUpperCase())}
-                  placeholder="2AB22CS008"
+                  placeholder="2AB22CS019"
                   disabled={singleLoading}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent uppercase disabled:bg-gray-100"
                   onKeyPress={(e) => e.key === 'Enter' && handleSingleScrape()}
