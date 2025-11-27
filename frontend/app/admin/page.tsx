@@ -12,6 +12,7 @@ import {
   MagnifyingGlassIcon,
   GlobeAltIcon,
   ChartBarIcon,
+  BellIcon,
   ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline';
 
@@ -64,6 +65,14 @@ export default function AdminDashboard() {
       href: '/admin/vtu-settings',
       color: 'cyan',
       stats: 'Configure URLs'
+    },
+    {
+      title: 'Notifications',
+      description: 'Post and manage notifications for students',
+      icon: BellIcon,
+      href: '/admin/notifications',
+      color: 'indigo',
+      stats: 'Announce & Inform'
     }
   ];
 

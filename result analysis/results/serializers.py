@@ -13,7 +13,7 @@ from .models import (
     User, Department, Subject, SemesterSubject,
     Student, Faculty, FacultySubjectAssignment,
     ExamSchedule, StudentResult,  # ResultAnalytics removed - using real-time analytics
-    ScrapeLog, AuditLog, VTUSemesterURL
+    ScrapeLog, AuditLog, VTUSemesterURL, Notification
 )
 
 
@@ -471,3 +471,45 @@ class VTUSemesterURLSerializer(serializers.ModelSerializer):
     def get_url_type(self, obj):
         """Return URL type (even/odd semester)."""
         return obj.get_url_type()
+
+
+# ============================================================================
+# NOTIFICATION SERIALIZERS
+# ============================================================================
+
+class NotificationSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Notification model.
+    Used for listing and creating notifications.
+    """
+
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+    created_by_name = serializers.SerializerMethodField()
+    target_department_name = serializers.CharField(source='target_department.name', read_only=True)
+    is_expired = serializers.SerializerMethodField()
+    is_visible = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Notification
+        fields = [
+            'id', 'title', 'message', 'priority',
+            'created_by', 'created_by_username', 'created_by_name',
+            'target_department', 'target_department_name',
+            'target_semester', 'is_active', 'expires_at',
+            'created_at', 'updated_at', 'is_expired', 'is_visible'
+        ]
+        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+
+    def get_created_by_name(self, obj):
+        """Get full name or username of creator."""
+        if obj.created_by.first_name or obj.created_by.last_name:
+            return f"{obj.created_by.first_name} {obj.created_by.last_name}".strip()
+        return obj.created_by.username
+
+    def get_is_expired(self, obj):
+        """Check if notification has expired."""
+        return obj.is_expired()
+
+    def get_is_visible(self, obj):
+        """Check if notification should be visible."""
+        return obj.is_visible()

@@ -1200,3 +1200,95 @@ class VTUSemesterURL(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+
+# ============================================================================
+# NOTIFICATION MODEL
+# ============================================================================
+
+class Notification(models.Model):
+    """
+    Model for storing notifications that can be posted by Admin/Faculty
+    and viewed by Students.
+    """
+    PRIORITY_CHOICES = [
+        ('LOW', 'Low'),
+        ('MEDIUM', 'Medium'),
+        ('HIGH', 'High'),
+        ('URGENT', 'Urgent'),
+    ]
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False
+    )
+    title = models.CharField(
+        max_length=200,
+        help_text="Notification title"
+    )
+    message = models.TextField(
+        help_text="Notification message content"
+    )
+    priority = models.CharField(
+        max_length=10,
+        choices=PRIORITY_CHOICES,
+        default='MEDIUM',
+        help_text="Priority level of the notification",
+        db_index=True
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='notifications_created',
+        help_text="Admin or Faculty who created this notification"
+    )
+    target_department = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='notifications',
+        help_text="If set, notification is only for this department. Leave blank for all departments."
+    )
+    target_semester = models.IntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(8)],
+        help_text="If set, notification is only for this semester. Leave blank for all semesters."
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this notification is currently active",
+        db_index=True
+    )
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this notification should expire (optional)"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Notification'
+        verbose_name_plural = 'Notifications'
+        indexes = [
+            models.Index(fields=['-created_at', 'is_active']),
+            models.Index(fields=['priority', '-created_at']),
+            models.Index(fields=['target_department', 'target_semester', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.title} ({self.priority}) - {self.created_at.strftime('%Y-%m-%d')}"
+
+    def is_expired(self):
+        """Check if notification has expired."""
+        if not self.expires_at:
+            return False
+        return timezone.now() > self.expires_at
+
+    def is_visible(self):
+        """Check if notification should be visible to users."""
+        return self.is_active and not self.is_expired()

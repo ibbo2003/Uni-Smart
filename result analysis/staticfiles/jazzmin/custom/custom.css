@@ -1,0 +1,158 @@
+/* Custom CSS to fix text overflow in Jazzmin Admin */
+
+/* Fix sidebar text overflow */
+.sidebar .nav-link {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.875rem;
+}
+
+.sidebar .nav-link p {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 0;
+}
+
+/* Show text on sidebar hover when collapsed */
+.sidebar-mini.sidebar-collapse .main-sidebar:hover .nav-link p {
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    width: auto !important;
+    margin-left: 0 !important;
+}
+
+.sidebar-mini.sidebar-collapse .main-sidebar:hover .brand-text {
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    width: auto !important;
+}
+
+/* Force show all text elements on hover */
+.sidebar-mini.sidebar-collapse .main-sidebar:hover .nav-sidebar .nav-link > p,
+.sidebar-mini.sidebar-collapse .main-sidebar:hover .sidebar .nav-link > p {
+    display: inline-block !important;
+}
+
+/* Override AdminLTE's hidden text on collapsed sidebar when hovering */
+.sidebar-mini.sidebar-collapse:not(.sidebar-no-expand) .main-sidebar:hover .nav-link > p {
+    animation-name: none !important;
+    animation-duration: 0s !important;
+    display: inline-block !important;
+    width: auto !important;
+    white-space: nowrap !important;
+}
+
+/* Fix brand text overflow */
+.brand-link {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0.8rem 0.5rem;
+}
+
+.brand-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 1rem !important;
+    font-weight: 600;
+}
+
+/* Compact sidebar navigation */
+.sidebar-mini .main-sidebar:not(.sidebar-no-expand):hover .brand-text {
+    font-size: 0.9rem !important;
+}
+
+/* Fix navbar text */
+.navbar .navbar-nav .nav-link {
+    font-size: 0.875rem;
+    padding: 0.5rem 0.75rem;
+}
+
+/* Reduce sidebar width slightly for better fit */
+.main-sidebar {
+    width: 220px !important;
+}
+
+.sidebar-mini.sidebar-collapse .main-sidebar {
+    width: 4.6rem !important;
+}
+
+.sidebar-mini.sidebar-collapse .main-sidebar:hover {
+    width: 220px !important;
+}
+
+/* Adjust content margin */
+.sidebar-mini .content-wrapper,
+.sidebar-mini .main-footer,
+.sidebar-mini .main-header {
+    margin-left: 220px !important;
+}
+
+.sidebar-mini.sidebar-collapse .content-wrapper,
+.sidebar-mini.sidebar-collapse .main-footer,
+.sidebar-mini.sidebar-collapse .main-header {
+    margin-left: 4.6rem !important;
+}
+
+/* Fix menu items */
+.nav-sidebar .nav-item > .nav-link {
+    padding: 0.5rem 0.5rem;
+}
+
+.nav-sidebar .nav-icon {
+    margin-right: 0.5rem;
+    font-size: 0.875rem;
+}
+
+/* Fix header brand */
+.navbar-nav .nav-item .nav-link {
+    white-space: nowrap;
+}
+
+/* Compact footer */
+.main-footer {
+    font-size: 0.8rem;
+    padding: 0.5rem;
+}
+
+/* Fix dropdown menus */
+.navbar-nav .dropdown-menu {
+    font-size: 0.875rem;
+}
+
+/* Ensure icons don't overflow */
+.nav-icon,
+.fas,
+.far,
+.fab {
+    min-width: 1.5rem;
+    text-align: center;
+}
+
+/* Fix sidebar menu tree */
+.nav-treeview > .nav-item > .nav-link {
+    padding-left: 2rem;
+    font-size: 0.8rem;
+}
+
+/* Better handling of long model names */
+.sidebar .nav-link .right {
+    margin-left: auto;
+}
+
+/* Hide the sidebar toggle button (hamburger menu) */
+.nav-link[data-widget="pushmenu"] {
+    display: none !important;
+}
+
+/* Alternative selector for sidebar toggle */
+a[data-widget="pushmenu"],
+button[data-widget="pushmenu"],
+.sidebar-toggle {
+    display: none !important;
+}

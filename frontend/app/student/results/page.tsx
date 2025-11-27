@@ -158,14 +158,16 @@ export default function StudentResults() {
   };
 
   const loadResults = async () => {
-    if (!user || !token) return;
+    if (!user || !token || !studentProfile) return;
     setIsLoading(true);
     setScrapeMessage('');
     try {
-      console.log('[Student Results] Fetching results from:', `${API_BASE_URL}/results/`);
+      const url = `${API_BASE_URL}/results/?student=${studentProfile.id}`;
+      console.log('[Student Results] Fetching results from:', url);
+      console.log('[Student Results] Student ID:', studentProfile.id);
       console.log('[Student Results] Token:', token.substring(0, 20) + '...');
 
-      const response = await fetch(`${API_BASE_URL}/results/`, {
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

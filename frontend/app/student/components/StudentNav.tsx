@@ -7,6 +7,7 @@ import {
   CalendarIcon,
   ChartBarIcon,
   ClipboardDocumentCheckIcon,
+  BellIcon,
   ArrowRightOnRectangleIcon,
   UserCircleIcon
 } from '@heroicons/react/24/outline';
@@ -26,6 +27,7 @@ export default function StudentNav() {
     { name: 'Timetable', path: '/student/timetable', icon: CalendarIcon },
     { name: 'Results', path: '/student/results', icon: ChartBarIcon },
     { name: 'Exam Seating', path: '/student/exams', icon: ClipboardDocumentCheckIcon },
+    { name: 'Notifications', path: '/student/notifications', icon: BellIcon },
   ];
 
   return (

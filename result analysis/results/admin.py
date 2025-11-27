@@ -14,7 +14,7 @@ from .models import (
     User, Department, Subject, SemesterSubject,
     Student, Faculty, FacultySubjectAssignment,
     ExamSchedule, StudentResult,  # ResultAnalytics removed - using real-time analytics
-    ScrapeLog, AuditLog, SystemSettings
+    ScrapeLog, AuditLog, SystemSettings, Notification
 )
 
 
@@ -489,6 +489,62 @@ class SystemSettingsAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         """Auto-set updated_by"""
         obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+# ============================================================================
+# NOTIFICATION ADMIN
+# ============================================================================
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    """Notification admin interface."""
+
+    list_display = [
+        'title', 'priority_badge', 'created_by', 'target_department',
+        'target_semester', 'is_active', 'expires_at', 'created_at'
+    ]
+    list_filter = ['priority', 'is_active', 'target_department', 'target_semester', 'created_at']
+    search_fields = ['title', 'message', 'created_by__username']
+    ordering = ['-created_at']
+    readonly_fields = ['created_at', 'updated_at']
+
+    fieldsets = (
+        ('Notification Content', {
+            'fields': ('title', 'message', 'priority')
+        }),
+        ('Targeting', {
+            'fields': ('target_department', 'target_semester'),
+            'description': 'Leave blank to send to all departments/semesters'
+        }),
+        ('Status & Expiry', {
+            'fields': ('is_active', 'expires_at')
+        }),
+        ('Metadata', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def priority_badge(self, obj):
+        """Display priority with color coding."""
+        colors = {
+            'LOW': '#3b82f6',  # blue
+            'MEDIUM': '#f59e0b',  # amber
+            'HIGH': '#f97316',  # orange
+            'URGENT': '#ef4444',  # red
+        }
+        color = colors.get(obj.priority, '#6b7280')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 4px; font-weight: bold;">{}</span>',
+            color, obj.priority
+        )
+    priority_badge.short_description = 'Priority'
+
+    def save_model(self, request, obj, form, change):
+        """Auto-set created_by to current user on creation."""
+        if not change:  # Only on creation
+            obj.created_by = request.user
         super().save_model(request, obj, form, change)
 
 

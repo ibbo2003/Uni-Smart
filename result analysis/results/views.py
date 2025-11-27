@@ -19,7 +19,7 @@ from .models import (
     User, Department, Subject, SemesterSubject,
     Student, Faculty, FacultySubjectAssignment,
     ExamSchedule, StudentResult,  # ResultAnalytics removed - using real-time analytics
-    ScrapeLog, AuditLog, SystemSettings, VTUSemesterURL
+    ScrapeLog, AuditLog, SystemSettings, VTUSemesterURL, Notification
 )
 from .serializers import (
     UserSerializer, UserCreateSerializer, DepartmentSerializer,
@@ -29,7 +29,7 @@ from .serializers import (
     # ResultAnalyticsSerializer removed - using real-time analytics
     ScrapeLogSerializer, AuditLogSerializer,
     ScrapeRequestSerializer, DashboardStatsSerializer, PasswordChangeSerializer,
-    SemesterResultsSerializer, VTUSemesterURLSerializer
+    SemesterResultsSerializer, VTUSemesterURLSerializer, NotificationSerializer
 )
 from .permissions import (
     IsAdmin, IsFaculty, IsStudent, IsAdminOrFaculty,
@@ -1505,3 +1505,79 @@ def get_current_academic_year(student):
 
     end_year = start_year + 1
     return f"{start_year}-{str(end_year)[2:]}"
+
+
+# ============================================================================
+# NOTIFICATION VIEWSET
+# ============================================================================
+
+class NotificationViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Notifications.
+    - Admin and Faculty can create, update, delete notifications
+    - Students can only view notifications relevant to them
+    """
+    queryset = Notification.objects.all()
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['priority', 'is_active', 'target_department', 'target_semester']
+    search_fields = ['title', 'message']
+    ordering_fields = ['created_at', 'priority', 'expires_at']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        """
+        Filter notifications based on user role.
+        - Admin/Faculty: See all notifications
+        - Students: See only visible notifications relevant to them (their department/semester)
+        """
+        user = self.request.user
+        queryset = super().get_queryset()
+
+        if user.role == 'ADMIN' or user.role == 'FACULTY':
+            # Admin and Faculty can see all notifications
+            return queryset
+
+        elif user.role == 'STUDENT':
+            try:
+                student = user.student_profile
+                # Students see notifications that are:
+                # 1. Active and not expired
+                # 2. Either general (no target) or targeted to their department/semester
+                queryset = queryset.filter(is_active=True)
+
+                # Filter by expiration
+                now = timezone.now()
+                queryset = queryset.filter(
+                    Q(expires_at__isnull=True) | Q(expires_at__gt=now)
+                )
+
+                # Filter by department and semester
+                queryset = queryset.filter(
+                    Q(target_department__isnull=True) | Q(target_department=student.department)
+                ).filter(
+                    Q(target_semester__isnull=True) | Q(target_semester=student.current_semester)
+                )
+
+                return queryset
+            except Exception as e:
+                return Notification.objects.none()
+
+        return Notification.objects.none()
+
+    def get_permissions(self):
+        """
+        Define permissions for different actions.
+        - List/Retrieve: All authenticated users
+        - Create/Update/Delete: Admin and Faculty only
+        """
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        elif self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [IsAuthenticated(), IsAdminOrFaculty()]
+        return super().get_permissions()
+
+    def perform_create(self, serializer):
+        """Set the created_by field to the current user."""
+        serializer.save(created_by=self.request.user)
