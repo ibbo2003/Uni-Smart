@@ -44,6 +44,9 @@ export default function StudentResults() {
   const [scrapeMessage, setScrapeMessage] = useState<string>('');
   const [studentProfile, setStudentProfile] = useState<any>(null);
   const [vtuURL, setVtuURL] = useState<string>('');
+  const [selectedSemester, setSelectedSemester] = useState<number>(1);
+  const [availableVTUURLs, setAvailableVTUURLs] = useState<Map<number, string>>(new Map());
+  const [missingSemesters, setMissingSemesters] = useState<number[]>([]);
 
   console.log('[Student Results] Component mounted. User:', user, 'Token exists:', !!token);
 
@@ -67,10 +70,11 @@ export default function StudentResults() {
       if (response.ok) {
         const data = await response.json();
         console.log('[Student Results] Profile data:', data);
-        // API returns array of students, but for STUDENT role it returns only their profile
-        if (Array.isArray(data) && data.length > 0) {
-          setStudentProfile(data[0]);
-          console.log('[Student Results] Student profile set:', data[0]);
+        // API returns paginated response with results array
+        const students = Array.isArray(data) ? data : (data.results || []);
+        if (students.length > 0) {
+          setStudentProfile(students[0]);
+          console.log('[Student Results] Student profile set:', students[0]);
         } else {
           console.log('[Student Results] No student profile found in response');
         }
@@ -90,8 +94,9 @@ export default function StudentResults() {
       const currentYear = new Date().getFullYear();
       const academicYear = `${currentYear}-${(currentYear + 1).toString().slice(-2)}`;
 
+      // Fetch all active VTU URLs for all semesters
       const response = await fetch(
-        `${API_BASE_URL}/vtu-semester-urls/?semester=${studentProfile.current_semester}&academic_year=${academicYear}&is_active=true`,
+        `${API_BASE_URL}/vtu-semester-urls/?is_active=true`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -103,8 +108,18 @@ export default function StudentResults() {
       if (response.ok) {
         const data = await response.json();
         const results = Array.isArray(data) ? data : data.results || [];
-        if (results.length > 0) {
-          setVtuURL(results[0].url);
+
+        // Build a map of semester -> VTU URL
+        const urlMap = new Map<number, string>();
+        results.forEach((item: any) => {
+          urlMap.set(item.semester, item.url);
+        });
+        setAvailableVTUURLs(urlMap);
+
+        // Set default VTU URL for current semester
+        if (urlMap.has(studentProfile.current_semester)) {
+          setVtuURL(urlMap.get(studentProfile.current_semester)!);
+          setSelectedSemester(studentProfile.current_semester);
         }
       }
     } catch (error) {
@@ -180,8 +195,12 @@ export default function StudentResults() {
         const data = await response.json();
         console.log('[Student Results] Data received:', data);
 
-        if (Array.isArray(data) && data.length > 0) {
-          const semesterResults = groupBySemester(data);
+        // Handle both paginated and non-paginated responses
+        const results = Array.isArray(data) ? data : (data.results || []);
+        console.log('[Student Results] Parsed results:', results.length, 'records');
+
+        if (results.length > 0) {
+          const semesterResults = groupBySemester(results);
           setResultsData(semesterResults);
 
           // Calculate overall CGPA
@@ -192,10 +211,19 @@ export default function StudentResults() {
             totalGradePoints += sem.sgpa * sem.total_credits;
           });
           setCgpa(totalCredits > 0 ? totalGradePoints / totalCredits : 0);
+
+          // Identify missing semesters
+          const existingSemesters = semesterResults.map(s => s.semester);
+          const allSemesters = Array.from({ length: studentProfile.current_semester }, (_, i) => i + 1);
+          const missing = allSemesters.filter(sem => !existingSemesters.includes(sem));
+          setMissingSemesters(missing);
         } else {
           console.log('[Student Results] No results found or empty array');
           setResultsData([]);
           setCgpa(0);
+          // All semesters are missing
+          const allSemesters = Array.from({ length: studentProfile.current_semester }, (_, i) => i + 1);
+          setMissingSemesters(allSemesters);
         }
       } else {
         const errorText = await response.text();
@@ -208,11 +236,14 @@ export default function StudentResults() {
     }
   };
 
-  const handleScrapeResults = async () => {
+  const handleScrapeResults = async (semesterToScrape?: number) => {
     if (!user || !token || !studentProfile) return;
 
-    if (!vtuURL) {
-      setScrapeMessage(`No VTU URL configured for Semester ${studentProfile.current_semester}. Please contact admin.`);
+    const targetSemester = semesterToScrape || selectedSemester;
+    const targetURL = availableVTUURLs.get(targetSemester) || vtuURL;
+
+    if (!targetURL) {
+      setScrapeMessage(`No VTU URL configured for Semester ${targetSemester}. Please contact admin.`);
       return;
     }
 
@@ -232,16 +263,16 @@ export default function StudentResults() {
         },
         body: JSON.stringify({
           usn: studentProfile.usn,
-          semester: studentProfile.current_semester,
+          semester: targetSemester,
           academic_year: academicYear,
-          vtu_url: vtuURL
+          vtu_url: targetURL
         })
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        setScrapeMessage(`Results scraped successfully! ${data.records_created || 0} new records, ${data.records_updated || 0} updated. Refreshing...`);
+        setScrapeMessage(`Semester ${targetSemester} results scraped successfully! ${data.records_created || 0} new records, ${data.records_updated || 0} updated. Refreshing...`);
         setTimeout(() => {
           loadResults();
           setScrapeMessage('');
@@ -304,7 +335,7 @@ export default function StudentResults() {
               <p className="text-gray-700 mb-6">Your results haven't been uploaded yet. Click the button below to scrape your results from VTU.</p>
 
               <button
-                onClick={handleScrapeResults}
+                onClick={() => handleScrapeResults()}
                 disabled={isScraping}
                 className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
@@ -345,7 +376,7 @@ export default function StudentResults() {
               <p className="text-gray-600">View your semester-wise academic performance</p>
             </div>
             <button
-              onClick={handleScrapeResults}
+              onClick={() => handleScrapeResults()}
               disabled={isScraping}
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
@@ -366,6 +397,33 @@ export default function StudentResults() {
           {scrapeMessage && (
             <div className={`mb-6 p-4 rounded-lg ${scrapeMessage.includes('success') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
               {scrapeMessage}
+            </div>
+          )}
+
+          {/* Missing Semesters Section */}
+          {missingSemesters.length > 0 && (
+            <div className="mb-8 bg-orange-50 border border-orange-200 rounded-xl p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Missing Semester Results</h3>
+              <p className="text-gray-700 mb-4">
+                The following semesters don't have results in the system. Click on a semester to scrape its results from VTU.
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                {missingSemesters.map((sem) => (
+                  <button
+                    key={sem}
+                    onClick={() => handleScrapeResults(sem)}
+                    disabled={isScraping || !availableVTUURLs.has(sem)}
+                    className="flex flex-col items-center gap-2 p-4 bg-white border-2 border-orange-300 rounded-lg hover:bg-orange-100 hover:border-orange-500 transition-colors disabled:bg-gray-100 disabled:border-gray-300 disabled:cursor-not-allowed"
+                    title={availableVTUURLs.has(sem) ? `Click to scrape Semester ${sem} results` : `No VTU URL configured for Semester ${sem}`}
+                  >
+                    <AcademicCapIcon className={`h-8 w-8 ${availableVTUURLs.has(sem) ? 'text-orange-600' : 'text-gray-400'}`} />
+                    <span className="text-sm font-semibold text-gray-900">Sem {sem}</span>
+                    {!availableVTUURLs.has(sem) && (
+                      <span className="text-xs text-red-600">No URL</span>
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 

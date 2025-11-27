@@ -260,6 +260,8 @@ class StudentResultSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source='student.name', read_only=True)
     subject_code = serializers.CharField(source='subject.code', read_only=True)
     subject_name = serializers.CharField(source='subject.name', read_only=True)
+    credits = serializers.DecimalField(source='subject.credits', max_digits=3, decimal_places=1, read_only=True)
+    result = serializers.CharField(source='result_status', read_only=True)
     percentage = serializers.SerializerMethodField()
     pass_status = serializers.SerializerMethodField()
 
@@ -267,9 +269,9 @@ class StudentResultSerializer(serializers.ModelSerializer):
         model = StudentResult
         fields = [
             'id', 'student', 'student_usn', 'student_name',
-            'subject', 'subject_code', 'subject_name',
+            'subject', 'subject_code', 'subject_name', 'credits',
             'exam_schedule', 'semester', 'internal_marks',
-            'external_marks', 'total_marks', 'result_status', 'pass_status',
+            'external_marks', 'total_marks', 'result_status', 'result', 'pass_status',
             'grade', 'grade_point', 'percentage', 'is_latest',
             'attempt_number', 'announced_date', 'scraped_at', 'updated_at'
         ]

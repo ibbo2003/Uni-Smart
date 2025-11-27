@@ -357,24 +357,63 @@ class VTUResultScraper:
         records_updated = 0
 
         try:
-            usn = result_data['usn']
+            # Normalize USN to uppercase for consistency
+            usn = result_data['usn'].upper()
             student_name = result_data['student_name']
             # Use provided semester or fallback to parsed semester
             semester = semester if semester is not None else result_data.get('semester')
-            
+
             # Extract department code from USN (e.g., 2AB22CS008 -> CS)
-            dept_code = usn[5:7] if len(usn) >= 7 else "XX"
-            
-            # Get or create department
-            department, _ = Department.objects.get_or_create(
-                code=dept_code,
-                defaults={
-                    'name': f'{dept_code} Department',
-                    'is_active': True
+            usn_dept_code = usn[5:7] if len(usn) >= 7 else "XX"
+
+            # Map USN department codes to actual department codes
+            dept_code_mapping = {
+                'CS': 'CSE',  # Computer Science -> Computer Science and Engineering
+                'EC': 'ECE',  # Electronics and Communication
+                'ME': 'MECH', # Mechanical Engineering
+                'CV': 'CIVIL', # Civil Engineering
+                'EE': 'EEE',  # Electrical and Electronics Engineering
+                'IS': 'ISE',  # Information Science and Engineering
+                'TE': 'TCE',  # Telecommunication Engineering
+                'BT': 'BTE',  # Biotechnology Engineering
+                'CH': 'CHEM', # Chemical Engineering
+                'IM': 'IEM',  # Industrial Engineering and Management
+                'ML': 'AIML', # Machine Learning -> AI and ML
+                'AI': 'AIML', # Artificial Intelligence -> AI and ML
+            }
+
+            # Get the actual department code
+            dept_code = dept_code_mapping.get(usn_dept_code, usn_dept_code)
+
+            # Try to find existing department first (case-insensitive)
+            try:
+                department = Department.objects.get(code__iexact=dept_code, is_active=True)
+            except Department.DoesNotExist:
+                # Department name mapping for creating new departments
+                dept_name_mapping = {
+                    'CSE': 'Computer Science and Engineering',
+                    'ECE': 'Electronics and Communication Engineering',
+                    'MECH': 'Mechanical Engineering',
+                    'CIVIL': 'Civil Engineering',
+                    'EEE': 'Electrical and Electronics Engineering',
+                    'ISE': 'Information Science and Engineering',
+                    'TCE': 'Telecommunication Engineering',
+                    'BTE': 'Biotechnology Engineering',
+                    'CHEM': 'Chemical Engineering',
+                    'IEM': 'Industrial Engineering and Management',
+                    'AIML': 'Artificial Intelligence and Machine Learning',
                 }
-            )
-            
-            # Get or create user for student
+
+                # Create department if it doesn't exist
+                department, _ = Department.objects.get_or_create(
+                    code=dept_code,
+                    defaults={
+                        'name': dept_name_mapping.get(dept_code, f'{dept_code} Department'),
+                        'is_active': True
+                    }
+                )
+
+            # Get or create user for student (username lowercase for consistency)
             username = usn.lower()
             user, user_created = User.objects.get_or_create(
                 username=username,
@@ -383,27 +422,32 @@ class VTUResultScraper:
                     'role': 'STUDENT'
                 }
             )
-            
+
             if user_created:
                 user.set_password(usn)  # Default password is USN
                 user.save()
                 logger.info(f"Created user account for {usn}")
-            
-            # Get or create student
-            student, student_created = Student.objects.get_or_create(
-                usn=usn,
-                defaults={
-                    'user': user,
-                    'name': student_name,
-                    'department': department,
-                    'current_semester': semester,
-                    'batch': usn[3:5] if len(usn) >= 5 else '22',
-                    'admission_year': 2000 + int(usn[3:5]) if len(usn) >= 5 else 2022,
-                    'email': f"{usn.lower()}@student.vtu.ac.in",
-                    'is_active': True
-                }
-            )
-            
+
+            # Get or create student - Try case-insensitive lookup first
+            try:
+                student = Student.objects.get(usn__iexact=usn)
+                student_created = False
+                logger.info(f"Found existing student with USN: {student.usn}")
+            except Student.DoesNotExist:
+                student, student_created = Student.objects.get_or_create(
+                    usn=usn,
+                    defaults={
+                        'user': user,
+                        'name': student_name,
+                        'department': department,
+                        'current_semester': semester,
+                        'batch': usn[3:5] if len(usn) >= 5 else '22',
+                        'admission_year': 2000 + int(usn[3:5]) if len(usn) >= 5 else 2022,
+                        'email': f"{usn.lower()}@student.vtu.ac.in",
+                        'is_active': True
+                    }
+                )
+
             if student_created:
                 records_created += 1
                 logger.info(f"Created student: {usn}")

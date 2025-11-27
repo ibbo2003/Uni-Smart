@@ -1334,12 +1334,20 @@ class VTUSemesterURLViewSet(viewsets.ModelViewSet):
 
     queryset = VTUSemesterURL.objects.all()
     serializer_class = VTUSemesterURLSerializer
-    permission_classes = [IsAdminUser]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['semester', 'academic_year', 'is_active']
     search_fields = ['academic_year', 'url']
     ordering_fields = ['semester', 'academic_year', 'updated_at']
     ordering = ['-academic_year', '-semester']
+
+    def get_permissions(self):
+        """
+        Allow read access for all authenticated users.
+        Only admin can create, update, or delete.
+        """
+        if self.action in ['list', 'retrieve', 'get_for_student']:
+            return [IsAuthenticated()]
+        return [IsAdminUser()]
 
     def perform_create(self, serializer):
         """Set updated_by on creation."""
@@ -1513,9 +1521,10 @@ def get_current_academic_year(student):
 
 class NotificationViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for Notifications.
-    - Admin and Faculty can create, update, delete notifications
-    - Students can only view notifications relevant to them
+    ViewSet for Notifications with RBAC.
+    - Admin: Can create, update, delete, and deactivate notifications
+    - Faculty: Can only create notifications (cannot edit/delete/deactivate)
+    - Students: Can only view notifications relevant to them
     """
     queryset = Notification.objects.all()
     serializer_class = NotificationSerializer
@@ -1570,12 +1579,15 @@ class NotificationViewSet(viewsets.ModelViewSet):
         """
         Define permissions for different actions.
         - List/Retrieve: All authenticated users
-        - Create/Update/Delete: Admin and Faculty only
+        - Create: Admin and Faculty
+        - Update/Delete: Admin only
         """
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
-        elif self.action in ['create', 'update', 'partial_update', 'destroy']:
+        elif self.action == 'create':
             return [IsAuthenticated(), IsAdminOrFaculty()]
+        elif self.action in ['update', 'partial_update', 'destroy']:
+            return [IsAdmin()]
         return super().get_permissions()
 
     def perform_create(self, serializer):
