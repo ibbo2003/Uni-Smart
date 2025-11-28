@@ -515,3 +515,27 @@ class NotificationSerializer(serializers.ModelSerializer):
     def get_is_visible(self, obj):
         """Check if notification should be visible."""
         return obj.is_visible()
+
+
+# ============================================================================
+# JWT TOKEN SERIALIZERS
+# ============================================================================
+
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """
+    Custom JWT serializer that includes user role in token payload.
+    This allows microservices to authorize based on user role without additional DB queries.
+    """
+
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+
+        # Add custom claims
+        token['role'] = user.role
+        token['email'] = user.email
+
+        return token

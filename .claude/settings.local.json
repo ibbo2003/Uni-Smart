@@ -13,7 +13,14 @@
       "Bash(cat:*)",
       "Bash(taskkill:*)",
       "Bash(netstat:*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(npm start)",
+      "Bash(npm run dev:*)",
+      "Bash(timeout 5 bash -c 'while ! curl -s http://localhost:3000 > /dev/null; do sleep 1; done; echo \"\"Server ready\"\"')",
+      "Bash(timeout 5 bash -c 'while ! curl -s http://localhost:8001 > /dev/null; do sleep 1; done; echo \"\"Django ready\"\"')",
+      "Bash(cmd //c \"for /f \"\"tokens=5\"\" %a in (''netstat -ano ^| findstr \"\":5000\"\"'') do @taskkill //F //PID %a\")",
+      "Bash(taskkill.exe:*)",
+      "Bash(powershell -Command \"Stop-Process -Id 30888 -Force\")"
     ],
     "deny": [],
     "ask": []

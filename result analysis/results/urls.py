@@ -13,6 +13,7 @@ from rest_framework_simplejwt.views import (
 )
 
 from . import views
+from .serializers import CustomTokenObtainPairSerializer
 from .views import (
     UserViewSet, DepartmentViewSet, SubjectViewSet,
     StudentViewSet, FacultyViewSet, FacultySubjectAssignmentViewSet,
@@ -43,7 +44,7 @@ router.register(r'notifications', NotificationViewSet, basename='notification')
 urlpatterns = [
     # JWT Authentication endpoints
     path('auth/register/', views.register_user, name='register_user'),
-    path('auth/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('auth/login/', TokenObtainPairView.as_view(serializer_class=CustomTokenObtainPairSerializer), name='token_obtain_pair'),
     path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/verify/', TokenVerifyView.as_view(), name='token_verify'),
 

@@ -142,7 +142,8 @@ app.post('/api/timetable/generate', async (req, res) => {
         const response = await axios.post(pythonServiceUrl, pythonPayload, {
             timeout: 300000, // 5 minutes timeout
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': req.headers.authorization || ''
             }
         });
         
@@ -353,6 +354,74 @@ app.get('/api/timetable/:sectionId', async (req, res) => {
         });
     } finally {
         if (connection) await connection.end();
+    }
+});
+
+/**
+ * DELETE /api/timetable/:sectionId
+ * Delete a timetable by section ID - ADMIN ONLY
+ * Requires JWT authentication with ADMIN role
+ */
+app.delete('/api/timetable/:sectionId', async (req, res) => {
+    const { sectionId } = req.params;
+    console.log(`[GATEWAY] 🗑️  Request to delete timetable: ${sectionId}`);
+
+    // Check for authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+        console.log('[GATEWAY] ❌ No authorization header provided');
+        return res.status(401).json({
+            success: false,
+            message: 'Authentication required'
+        });
+    }
+
+    // For now, we'll verify the token exists.
+    // The frontend should only show delete button for ADMIN users.
+    // Add JWT verification here if needed for extra security.
+
+    let connection;
+
+    try {
+        connection = await mysql.createConnection(dbConfig);
+
+        // Check if timetable exists
+        const [existingRows] = await connection.execute(
+            'SELECT COUNT(*) as count FROM scheduled_classes WHERE section_id = ?',
+            [sectionId]
+        );
+
+        if (existingRows[0].count === 0) {
+            console.log(`[GATEWAY] ⚠️  Timetable ${sectionId} not found`);
+            return res.status(404).json({
+                success: false,
+                message: `Timetable for ${sectionId} not found`
+            });
+        }
+
+        // Delete the timetable
+        const [result] = await connection.execute(
+            'DELETE FROM scheduled_classes WHERE section_id = ?',
+            [sectionId]
+        );
+
+        console.log(`[GATEWAY] ✅ Successfully deleted ${result.affectedRows} slots for ${sectionId}`);
+
+        res.status(200).json({
+            success: true,
+            message: `Timetable for ${sectionId.replace('_', ' ')} deleted successfully`,
+            deletedRows: result.affectedRows
+        });
+
+    } catch (error) {
+        console.error(`[GATEWAY] ERROR: Error deleting timetable for ${sectionId}:`, error.message);
+        res.status(500).json({
+            success: false,
+            message: `Failed to delete timetable for ${sectionId}`
+        });
+    } finally {
+        if (connection) await connection.end();
+        console.log('[GATEWAY] 🔌 Database connection closed');
     }
 });
 

@@ -125,8 +125,14 @@ function isContinuation(
   return { cont: contItems.length > 0, items: contItems };
 }
 
-const TimetableGrid = ({ timetableData }: { timetableData: TimeSlot[] }) => {
+const TimetableGrid = ({ timetableData, faculties }: { timetableData: TimeSlot[], faculties: Faculty[] }) => {
   const scheduleMap = buildScheduleMap(timetableData);
+
+  // Helper function to get faculty name from employee_id (stored in faculty_id field)
+  const getFacultyName = (facultyId: string): string => {
+    const faculty = faculties.find(f => f.employee_id === facultyId || String(f.employee_id) === facultyId);
+    return faculty ? faculty.name : facultyId;
+  };
 
   const getCellBackground = (slots: TimeSlot[]) => {
     if (slots.some((s) => s.subject_type === "PROJ" || s.subject_type === "MP")) return "bg-amber-50";
@@ -258,7 +264,7 @@ const TimetableGrid = ({ timetableData }: { timetableData: TimeSlot[] }) => {
                                     {slot.subject_code}
                                   </div>
                                   <div className="text-xs text-gray-600">
-                                    {slot.faculty_id}
+                                    {getFacultyName(slot.faculty_id)}
                                   </div>
                                   <div className="text-xs text-gray-500 italic">
                                     {slot.room_id}
@@ -296,7 +302,7 @@ const TimetableGrid = ({ timetableData }: { timetableData: TimeSlot[] }) => {
 
                           <div className="space-y-1">
                             <div className="text-xs text-gray-600 font-medium">
-                              👤 Prof {slot.faculty_id}
+                              👤 {getFacultyName(slot.faculty_id)}
                             </div>
                             <div className="text-xs text-gray-500">
                               {isLab && `🔹 Batch ${slot.batch_number} • `}
@@ -401,6 +407,7 @@ export default function TimetablePage() {
   const [availableTimetables, setAvailableTimetables] = useState<string[]>([]);
   const [selectedTimetable, setSelectedTimetable] = useState<string>("");
   const [isLoadingView, setIsLoadingView] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [timetableToDisplay, setTimetableToDisplay] = useState<TimeSlot[]>([]);
   const [message, setMessage] = useState<Message | null>(null);
   const [generationStats, setGenerationStats] = useState<{
@@ -513,7 +520,10 @@ export default function TimetablePage() {
     try {
       const response = await fetch("http://localhost:8080/api/timetable/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify(payload),
       });
       const result = await response.json();
@@ -572,7 +582,61 @@ export default function TimetablePage() {
     }
   };
 
-  
+  const handleDeleteTimetable = async () => {
+    if (!selectedTimetable) return;
+
+    // Confirm deletion
+    const confirmed = window.confirm(
+      `Are you sure you want to delete the timetable for ${selectedTimetable.replace("_", " ")}? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`http://localhost:8080/api/timetable/${selectedTimetable}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.message || "Failed to delete timetable.");
+
+      setMessage({
+        type: "success",
+        text: `Successfully deleted timetable for ${selectedTimetable.replace("_", " ")}.`,
+      });
+
+      // Clear the displayed timetable if it was the deleted one
+      setTimetableToDisplay([]);
+      setGenerationStats(null);
+
+      // Refresh the list of available timetables
+      const refreshResponse = await fetch("http://localhost:8080/api/timetables/available");
+      const refreshData = await refreshResponse.json();
+      if (refreshResponse.ok && Array.isArray(refreshData)) {
+        setAvailableTimetables(refreshData);
+        if (refreshData.length > 0) {
+          setSelectedTimetable(refreshData[0]);
+        } else {
+          setSelectedTimetable("");
+        }
+      }
+
+    } catch (error: any) {
+      setMessage({ type: "error", text: error.message });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+
   const handleExport = async (format: "pdf" | "word" | "excel") => {
     if (timetableToDisplay.length === 0) {
       setMessage({ type: "error", text: "Please generate or load a timetable first" });
@@ -720,7 +784,7 @@ export default function TimetablePage() {
                   ))}
                 </select>
               </div>
-              <div>
+              <div className="grid grid-cols-1 gap-3">
                 <button
                   type="button"
                   onClick={handleLoadTimetable}
@@ -729,17 +793,29 @@ export default function TimetablePage() {
                 >
                   {isLoadingView ? "Loading..." : "Load Timetable"}
                 </button>
+
+                {/* Delete button - ADMIN ONLY */}
+                {user?.role === 'ADMIN' && (
+                  <button
+                    type="button"
+                    onClick={handleDeleteTimetable}
+                    disabled={isDeleting || availableTimetables.length === 0}
+                    className="w-full bg-red-600 text-white px-6 py-3 rounded-md font-semibold hover:bg-red-700 disabled:bg-gray-400 transition-colors"
+                  >
+                    {isDeleting ? "Deleting..." : "Delete Timetable"}
+                  </button>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Generate New Timetable Form - Admin or Faculty Only */}
+          {/* Generate New Timetable Form - Admin Only */}
           <RoleGuard
-            allowedRoles={['ADMIN', 'FACULTY']}
+            allowedRoles={['ADMIN']}
             fallback={
               <div className="mt-10 bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
                 <p className="text-yellow-800 font-medium">
-                  Only administrators and faculty can generate timetables.
+                  Only administrators can generate timetables.
                 </p>
                 <p className="text-yellow-700 text-sm mt-2">
                   You can view existing timetables above.
@@ -753,7 +829,6 @@ export default function TimetablePage() {
             >
               <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                 <span>⚡</span> Generate New Timetable
-                {user?.role === 'FACULTY' && <span className="text-sm text-indigo-600">(Faculty Access)</span>}
               </h2>
 
             {/* Section Details */}
@@ -1115,7 +1190,7 @@ export default function TimetablePage() {
           {/* Display the timetable grid */}
           {timetableToDisplay.length > 0 && (
             <div ref={timetableRef}>
-              <TimetableGrid timetableData={timetableToDisplay} />
+              <TimetableGrid timetableData={timetableToDisplay} faculties={faculties} />
             </div>
           )}
 

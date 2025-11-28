@@ -4,7 +4,7 @@ import mysql.connector
 from scheduler import generate_semester_timetable
 from dotenv import load_dotenv
 import os
-from auth_middleware import require_admin_or_faculty
+from auth_middleware import require_admin_or_faculty, require_admin
 
 load_dotenv()
 
@@ -28,10 +28,10 @@ def get_db_connection():
         return None
 
 @app.route('/generate', methods=['POST'])
-@require_admin_or_faculty
+@require_admin
 def generate():
     """
-    Generate timetable - ADMIN and FACULTY only
+    Generate timetable - ADMIN only
     Requires JWT authentication
     """
     user = request.current_user

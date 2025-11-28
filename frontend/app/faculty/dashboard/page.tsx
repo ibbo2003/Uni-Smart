@@ -11,7 +11,9 @@ import {
   ChartBarIcon,
   UserGroupIcon,
   ClipboardDocumentCheckIcon,
+  BellIcon,
 } from '@heroicons/react/24/outline';
+import Link from 'next/link';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api';
 
@@ -309,19 +311,35 @@ export default function FacultyDashboard() {
                   {/* Subject Teacher Quick Actions */}
                   <div className="bg-white rounded-xl shadow-lg p-6 mt-6">
                     <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <button className="flex items-center gap-3 px-6 py-4 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <Link
+                        href="/faculty/results"
+                        className="flex items-center gap-3 px-6 py-4 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors"
+                      >
                         <ChartBarIcon className="h-6 w-6" />
-                        <span className="font-medium">View Subject Results</span>
-                      </button>
-                      <button className="flex items-center gap-3 px-6 py-4 bg-pink-50 text-pink-700 rounded-lg hover:bg-pink-100 transition-colors">
+                        <span className="font-medium">View Results</span>
+                      </Link>
+                      <Link
+                        href="/faculty/timetable"
+                        className="flex items-center gap-3 px-6 py-4 bg-pink-50 text-pink-700 rounded-lg hover:bg-pink-100 transition-colors"
+                      >
                         <CalendarIcon className="h-6 w-6" />
-                        <span className="font-medium">View Teaching Schedule</span>
-                      </button>
-                      <button className="flex items-center gap-3 px-6 py-4 bg-teal-50 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors">
+                        <span className="font-medium">My Timetable</span>
+                      </Link>
+                      <Link
+                        href="/faculty/subjects"
+                        className="flex items-center gap-3 px-6 py-4 bg-teal-50 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors"
+                      >
                         <BookOpenIcon className="h-6 w-6" />
-                        <span className="font-medium">Manage Subjects</span>
-                      </button>
+                        <span className="font-medium">My Subjects</span>
+                      </Link>
+                      <Link
+                        href="/faculty/notifications"
+                        className="flex items-center gap-3 px-6 py-4 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
+                      >
+                        <BellIcon className="h-6 w-6" />
+                        <span className="font-medium">Post Notification</span>
+                      </Link>
                     </div>
                   </div>
                 </div>

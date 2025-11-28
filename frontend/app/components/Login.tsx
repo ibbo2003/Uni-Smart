@@ -23,7 +23,7 @@ const Login: React.FC<LoginProps> = ({ toggleForm }) => {
       if (user.role === 'ADMIN') {
         router.push('/admin');
       } else if (user.role === 'FACULTY') {
-        router.push('/timetable');
+        router.push('/faculty/dashboard');
       } else if (user.role === 'STUDENT') {
         router.push('/student/dashboard');
       }
