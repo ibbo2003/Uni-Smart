@@ -118,13 +118,39 @@ CREATE TABLE IF NOT EXISTS exam_seating_plan (
   UNIQUE KEY unique_seat (exam_id, room_id, row_num, col_num)
 );
 
-select * from sections;
+-- Internal exam seating plan table (supports 2 students per seat)
+
+
+CREATE TABLE IF NOT EXISTS internal_exam_seating_plan (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  student_usn VARCHAR(255) NOT NULL,
+  exam_id INT NOT NULL,
+  room_id VARCHAR(255) NOT NULL,
+  row_num INT NOT NULL,
+  col_num INT NOT NULL,
+  seat_position TINYINT NOT NULL COMMENT '1 for first student, 2 for second student in the same seat',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (student_usn) REFERENCES students(usn) ON DELETE CASCADE,
+  FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
+  FOREIGN KEY (room_id) REFERENCES exam_rooms(id) ON DELETE CASCADE,
+
+  UNIQUE KEY unique_student_exam (student_usn, exam_id),
+  INDEX idx_exam_room (exam_id, room_id),
+  INDEX idx_seat_position (room_id, row_num, col_num)
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_0900_ai_ci;
+
+
+select * from students;
 
 -- Truncate all the files
 SET FOREIGN_KEY_CHECKS = 0; 
 
 TRUNCATE TABLE scheduled_classes;
 TRUNCATE TABLE exam_seating_plan;
+TRUNCATE TABLE internal_exam_seating_plan;
 TRUNCATE TABLE exam_registrations;
 TRUNCATE TABLE subjects;
 TRUNCATE TABLE exams;
@@ -217,3 +243,24 @@ HAVING COUNT(DISTINCT CONCAT(section_id, '-', batch_number)) > 1
 ORDER BY room_id, day, period;
 
 SELECT * FROM sections;
+
+SHOW TABLE STATUS LIKE 'students';
+
+DELIMITER $$
+
+CREATE TRIGGER trg_generate_student_email
+BEFORE INSERT ON students
+FOR EACH ROW
+BEGIN
+    IF NEW.email IS NULL OR NEW.email = '' THEN
+        SET NEW.email = CONCAT(LOWER(NEW.usn), '@anjuman.edu.in');
+    END IF;
+END$$
+
+DELIMITER ;
+
+
+UPDATE students
+SET email = CONCAT(LOWER(usn), '@anjuman.edu.in');
+
+

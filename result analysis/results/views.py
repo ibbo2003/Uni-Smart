@@ -1593,3 +1593,321 @@ class NotificationViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Set the created_by field to the current user."""
         serializer.save(created_by=self.request.user)
+
+
+# ============================================================================
+# PERFORMANCE ANALYSIS ENDPOINTS
+# ============================================================================
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsAdminOrFaculty])
+def comprehensive_performance_analysis(request):
+    """
+    Get comprehensive student performance analysis with advanced analytics.
+
+    Query Parameters:
+    - department_code: Department code (e.g., 'CS')
+    - batch: Student batch (e.g., '2022')
+    - semester: Semester number (1-8, optional)
+    - subject_code: Specific subject code (optional)
+
+    Returns detailed analytics including:
+    - Overall statistics
+    - Subject-wise performance
+    - Student rankings
+    - Grade distributions
+    - Trend analysis
+    - Pass/fail rates
+    """
+    from .analytics_service import ResultAnalytics
+    from django.db.models import Count, Avg, Q
+
+    department_code = request.query_params.get('department_code')
+    batch = request.query_params.get('batch')
+    semester = request.query_params.get('semester')
+    subject_code = request.query_params.get('subject_code')
+
+    if not department_code or not batch:
+        return Response(
+            {'error': 'department_code and batch are required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        department = Department.objects.get(code=department_code)
+    except Department.DoesNotExist:
+        return Response(
+            {'error': 'Department not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    # Get all students in this batch and department
+    students = Student.objects.filter(
+        department=department,
+        batch=batch,
+        is_active=True
+    )
+
+    total_students = students.count()
+
+    if total_students == 0:
+        return Response(
+            {'error': 'No students found for this criteria'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    # Build response data
+    response_data = {
+        'department_code': department_code,
+        'department_name': department.name,
+        'batch': batch,
+        'total_students': total_students,
+        'analysis_date': timezone.now().date(),
+    }
+
+    # If specific subject requested
+    if subject_code and semester:
+        semester_int = int(semester)
+        subject_analytics = ResultAnalytics.get_subject_analytics(
+            department_code=department_code,
+            semester=semester_int,
+            subject_code=subject_code,
+            batch=batch
+        )
+        response_data['subject_analysis'] = subject_analytics
+        response_data['analysis_type'] = 'subject'
+
+    # If semester specified (but no specific subject)
+    elif semester:
+        semester_int = int(semester)
+        batch_analytics = ResultAnalytics.get_batch_semester_analytics(
+            batch=batch,
+            semester=semester_int,
+            department_code=department_code
+        )
+        response_data['semester_analysis'] = batch_analytics
+        response_data['analysis_type'] = 'semester'
+
+    # Overall batch performance across all semesters
+    else:
+        # Get semester-wise overview
+        semester_performance = []
+
+        for sem in range(1, 9):
+            results = StudentResult.objects.filter(
+                student__in=students,
+                semester=sem,
+                is_latest=True
+            )
+
+            if results.exists():
+                total = results.count()
+                passed = results.filter(result_status='P').count()
+                failed = results.filter(result_status='F').count()
+                absent = results.filter(result_status='A').count()
+                appeared = total - absent
+
+                pass_rate = (passed / appeared * 100) if appeared > 0 else 0
+
+                # Calculate average SGPA
+                sgpa_list = []
+                for student in students:
+                    sgpa = student.calculate_sgpa(sem)
+                    if sgpa > 0:
+                        sgpa_list.append(float(sgpa))
+
+                avg_sgpa = sum(sgpa_list) / len(sgpa_list) if sgpa_list else 0
+
+                semester_performance.append({
+                    'semester': sem,
+                    'total_results': total,
+                    'appeared': appeared,
+                    'passed': passed,
+                    'failed': failed,
+                    'absent': absent,
+                    'pass_rate': round(pass_rate, 2),
+                    'average_sgpa': round(avg_sgpa, 2),
+                    'students_with_sgpa': len(sgpa_list)
+                })
+
+        # Overall CGPA statistics
+        cgpa_list = []
+        students_with_backlogs = 0
+        backlog_distribution = {}
+
+        for student in students:
+            cgpa = student.calculate_cgpa()
+            if cgpa > 0:
+                cgpa_list.append({
+                    'usn': student.usn,
+                    'name': student.name,
+                    'cgpa': float(cgpa)
+                })
+
+            # Count backlogs
+            backlog_count = student.get_total_backlogs_count()
+            if backlog_count > 0:
+                students_with_backlogs += 1
+                backlog_distribution[backlog_count] = backlog_distribution.get(backlog_count, 0) + 1
+
+        # Sort by CGPA
+        cgpa_list.sort(key=lambda x: x['cgpa'], reverse=True)
+
+        # Calculate statistics
+        avg_cgpa = sum(s['cgpa'] for s in cgpa_list) / len(cgpa_list) if cgpa_list else 0
+        highest_cgpa = cgpa_list[0]['cgpa'] if cgpa_list else 0
+        lowest_cgpa = cgpa_list[-1]['cgpa'] if cgpa_list else 0
+
+        # CGPA distribution
+        cgpa_ranges = {
+            '9.0-10.0': 0,
+            '8.0-8.9': 0,
+            '7.0-7.9': 0,
+            '6.0-6.9': 0,
+            '5.0-5.9': 0,
+            'Below 5.0': 0
+        }
+
+        for student in cgpa_list:
+            cgpa_val = student['cgpa']
+            if cgpa_val >= 9.0:
+                cgpa_ranges['9.0-10.0'] += 1
+            elif cgpa_val >= 8.0:
+                cgpa_ranges['8.0-8.9'] += 1
+            elif cgpa_val >= 7.0:
+                cgpa_ranges['7.0-7.9'] += 1
+            elif cgpa_val >= 6.0:
+                cgpa_ranges['6.0-6.9'] += 1
+            elif cgpa_val >= 5.0:
+                cgpa_ranges['5.0-5.9'] += 1
+            else:
+                cgpa_ranges['Below 5.0'] += 1
+
+        response_data.update({
+            'analysis_type': 'batch_overall',
+            'semester_wise_performance': semester_performance,
+            'cgpa_statistics': {
+                'average_cgpa': round(avg_cgpa, 2),
+                'highest_cgpa': round(highest_cgpa, 2),
+                'lowest_cgpa': round(lowest_cgpa, 2),
+                'total_students_with_cgpa': len(cgpa_list),
+                'cgpa_distribution': cgpa_ranges,
+                'top_10_students': cgpa_list[:10],
+                'bottom_10_students': cgpa_list[-10:] if len(cgpa_list) >= 10 else cgpa_list
+            },
+            'backlog_statistics': {
+                'students_with_backlogs': students_with_backlogs,
+                'students_without_backlogs': total_students - students_with_backlogs,
+                'backlog_distribution': backlog_distribution,
+                'percentage_with_backlogs': round((students_with_backlogs / total_students * 100), 2) if total_students > 0 else 0
+            }
+        })
+
+    return Response(response_data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsAdminOrFaculty])
+def student_performance_report(request):
+    """
+    Get individual student performance report.
+
+    Query Parameters:
+    - usn: Student USN
+
+    Returns:
+    - Complete academic record
+    - Semester-wise SGPA
+    - Overall CGPA
+    - Subject-wise performance
+    - Backlogs if any
+    - Performance trends
+    """
+    usn = request.query_params.get('usn')
+
+    if not usn:
+        return Response(
+            {'error': 'usn is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        student = Student.objects.get(usn=usn)
+    except Student.DoesNotExist:
+        return Response(
+            {'error': 'Student not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    # Basic info
+    response_data = {
+        'usn': student.usn,
+        'name': student.name,
+        'department': student.department.code,
+        'department_name': student.department.name,
+        'batch': student.batch,
+        'current_semester': student.current_semester,
+        'email': student.email,
+    }
+
+    # Calculate CGPA
+    cgpa = student.calculate_cgpa()
+    response_data['cgpa'] = float(cgpa)
+
+    # Semester-wise performance
+    semester_data = []
+    for sem in range(1, student.current_semester + 1):
+        results = student.results.filter(semester=sem, is_latest=True)
+
+        if results.exists():
+            sgpa = student.calculate_sgpa(sem)
+
+            # Subject details
+            subjects = []
+            for result in results:
+                subjects.append({
+                    'subject_code': result.subject.code,
+                    'subject_name': result.subject.name,
+                    'credits': float(result.subject.credits),
+                    'internal_marks': result.internal_marks,
+                    'external_marks': result.external_marks,
+                    'total_marks': result.total_marks,
+                    'grade': result.grade,
+                    'grade_point': float(result.grade_point),
+                    'result_status': result.result_status
+                })
+
+            total_credits = sum(float(r.subject.credits) for r in results if r.subject.subject_type not in ['NON_CREDIT', 'AUDIT'])
+
+            semester_data.append({
+                'semester': sem,
+                'sgpa': float(sgpa),
+                'total_subjects': results.count(),
+                'total_credits': total_credits,
+                'passed': results.filter(result_status='P').count(),
+                'failed': results.filter(result_status='F').count(),
+                'subjects': subjects
+            })
+
+    response_data['semester_wise_performance'] = semester_data
+
+    # Backlogs
+    backlogs = student.get_backlogs()
+    backlog_list = []
+    for backlog in backlogs:
+        backlog_list.append({
+            'subject_code': backlog.subject.code,
+            'subject_name': backlog.subject.name,
+            'semester': backlog.semester,
+            'internal_marks': backlog.internal_marks,
+            'external_marks': backlog.external_marks,
+            'total_marks': backlog.total_marks,
+            'attempt_number': backlog.attempt_number
+        })
+
+    response_data['backlogs'] = {
+        'total_backlogs': len(backlog_list),
+        'backlog_details': backlog_list
+    }
+
+    return Response(response_data, status=status.HTTP_200_OK)

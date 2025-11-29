@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { CalendarIcon, PlusIcon, TrashIcon, ArrowLeftIcon, UserGroupIcon } from '@heroicons/react/24/outline';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Exam {
   id: number;
@@ -13,6 +14,7 @@ interface Exam {
 }
 
 export default function ManageExamsPage() {
+  const { token } = useAuth();
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -27,12 +29,21 @@ export default function ManageExamsPage() {
   });
 
   useEffect(() => {
-    fetchExams();
-  }, []);
+    if (token) {
+      fetchExams();
+    }
+  }, [token]);
 
   const fetchExams = async () => {
+    if (!token) return;
+
     try {
-      const response = await fetch('http://localhost:5001/exams');
+      const response = await fetch('http://localhost:5001/exams', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       const data = await response.json();
       // Ensure data is an array
       if (Array.isArray(data)) {
@@ -59,11 +70,15 @@ export default function ManageExamsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!token) return;
 
     try {
       const response = await fetch('http://localhost:5001/exams', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify(formData)
       });
 
@@ -82,10 +97,15 @@ export default function ManageExamsPage() {
 
   const handleDelete = async (examId: number, subjectCode: string) => {
     if (!confirm(`Are you sure you want to delete exam for ${subjectCode}? This will also delete all student registrations for this exam.`)) return;
+    if (!token) return;
 
     try {
       const response = await fetch(`http://localhost:5001/exams/${examId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
 
       if (!response.ok) throw new Error('Failed to delete exam');

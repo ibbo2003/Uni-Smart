@@ -459,7 +459,11 @@ def get_exam_registrations(exam_id):
 @app.route('/extract-students-from-pdf', methods=['POST'])
 @require_admin_or_faculty
 def extract_students_from_pdf():
-    """Extract student data from uploaded PDF file - ADMIN and FACULTY only"""
+    """Extract student data from uploaded PDF file - ADMIN and FACULTY only
+
+    Intelligently extracts USN, Name, and Gender (optional) from PDF tables.
+    Handles various column formats and orders.
+    """
     if 'file' not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
 
@@ -475,37 +479,143 @@ def extract_students_from_pdf():
 
         students = []
 
+        def find_column_index(headers, keywords):
+            """Find column index by matching keywords (case-insensitive)"""
+            if not headers:
+                return None
+
+            for i, header in enumerate(headers):
+                if header:
+                    header_lower = str(header).lower().strip()
+                    for keyword in keywords:
+                        if keyword.lower() in header_lower:
+                            return i
+            return None
+
+        def is_valid_usn(value):
+            """Check if value looks like a valid VTU USN"""
+            if not value:
+                return False
+            value = str(value).strip()
+            # VTU USN format: typically 10 characters, alphanumeric
+            # Must have both letters and digits
+            if len(value) < 10:
+                return False
+
+            # Check if it's alphanumeric (allowing some special chars like .)
+            clean_value = value.replace('.', '').replace('-', '').replace('_', '')
+            if not clean_value:
+                return False
+
+            has_alpha = any(c.isalpha() for c in clean_value)
+            has_digit = any(c.isdigit() for c in clean_value)
+
+            # Should be mostly alphanumeric
+            alphanumeric_count = sum(c.isalnum() for c in clean_value)
+
+            return has_alpha and has_digit and alphanumeric_count >= 10
+
+        def extract_usn_from_row(row):
+            """Try to find USN in any column of the row"""
+            for cell in row:
+                if cell and is_valid_usn(cell):
+                    return str(cell).strip()
+            return None
+
         # Read PDF with pdfplumber for better table extraction
         with pdfplumber.open(file) as pdf:
-            for page in pdf.pages:
+            for page_num, page in enumerate(pdf.pages):
+                print(f"\n[PDF EXTRACT] Processing page {page_num + 1}")
+
                 # Extract tables from the page
                 tables = page.extract_tables()
 
-                for table in tables:
-                    # Skip header row
-                    for row in table[1:]:  # Skip first row (headers)
-                        if row and len(row) >= 3:
-                            # Extract data from columns
-                            roll_no = row[0] if row[0] else ""
-                            usn = row[1] if row[1] else ""
-                            name = row[2] if row[2] else ""
-                            gender = row[3] if len(row) > 3 and row[3] else "Male"
+                if not tables:
+                    print(f"[PDF EXTRACT] No tables found on page {page_num + 1}")
+                    continue
 
-                            # Clean up the data
-                            usn = usn.strip() if usn else ""
-                            name = name.strip().upper() if name else ""
-                            gender = gender.strip() if gender else "Male"
+                for table_num, table in enumerate(tables):
+                    if not table or len(table) < 2:
+                        continue
 
-                            # Only add if USN is valid
-                            if usn and len(usn) >= 10:  # VTU USN format check
-                                students.append({
-                                    "usn": usn,
-                                    "name": name,
-                                    "gender": gender
-                                })
+                    print(f"[PDF EXTRACT] Processing table {table_num + 1} with {len(table)} rows")
+
+                    # Try to detect header row and column indices
+                    header_row = table[0] if table else []
+                    usn_col = find_column_index(header_row, ['usn', 'university', 'seat', 'number', 'no', 'roll'])
+                    name_col = find_column_index(header_row, ['name', 'student'])
+                    gender_col = find_column_index(header_row, ['gender', 'sex', 'g', 'male', 'female'])
+
+                    print(f"[PDF EXTRACT] Detected columns - USN: {usn_col}, Name: {name_col}, Gender: {gender_col}")
+
+                    # Process data rows (skip header)
+                    for row_num, row in enumerate(table[1:], start=2):
+                        if not row or len(row) < 2:
+                            continue
+
+                        # Extract USN - try detected column first, then search all columns
+                        usn = None
+                        if usn_col is not None and usn_col < len(row):
+                            usn = row[usn_col]
+
+                        # If USN column detection failed, search for USN pattern in row
+                        if not is_valid_usn(usn):
+                            usn = extract_usn_from_row(row)
+
+                        if not is_valid_usn(usn):
+                            continue  # Skip row if no valid USN found
+
+                        # Extract Name - try detected column, then try adjacent columns
+                        name = ""
+                        if name_col is not None and name_col < len(row):
+                            name = row[name_col] if row[name_col] else ""
+                        else:
+                            # Try to find name in columns near USN
+                            for i, cell in enumerate(row):
+                                if cell and str(cell).strip() and not is_valid_usn(cell):
+                                    # Check if it looks like a name (mostly letters)
+                                    cell_str = str(cell).strip()
+                                    if len(cell_str) > 3 and sum(c.isalpha() or c.isspace() for c in cell_str) / len(cell_str) > 0.7:
+                                        name = cell_str
+                                        break
+
+                        # Extract Gender (optional) - default to "Not Specified" if not found
+                        gender = "Not Specified"
+                        if gender_col is not None and gender_col < len(row) and row[gender_col]:
+                            gender_value = str(row[gender_col]).strip().upper()
+                            # Normalize gender values
+                            if gender_value in ['M', 'MALE', 'BOY']:
+                                gender = "Male"
+                            elif gender_value in ['F', 'FEMALE', 'GIRL']:
+                                gender = "Female"
+                            else:
+                                gender = gender_value if gender_value else "Not Specified"
+
+                        # Clean up the data
+                        usn = str(usn).strip().upper() if usn else ""
+                        name = str(name).strip().upper() if name else "UNKNOWN"
+
+                        if usn:  # Only add if we have a valid USN
+                            student = {
+                                "usn": usn,
+                                "name": name,
+                                "gender": gender
+                            }
+                            students.append(student)
+                            print(f"[PDF EXTRACT] Row {row_num}: {student}")
+
+        # Remove duplicates (same USN)
+        unique_students = {}
+        for student in students:
+            if student['usn'] not in unique_students:
+                unique_students[student['usn']] = student
+
+        students = list(unique_students.values())
 
         if not students:
-            return jsonify({"error": "No valid student data found in PDF"}), 400
+            return jsonify({"error": "No valid student data found in PDF. Please ensure the PDF contains a table with USN and Name columns."}), 400
+
+        print(f"\n[PDF EXTRACT] Successfully extracted {len(students)} unique students")
 
         return jsonify({
             "message": f"Successfully extracted {len(students)} students",
@@ -514,7 +624,7 @@ def extract_students_from_pdf():
         }), 200
 
     except Exception as e:
-        print(f"Error extracting PDF: {str(e)}")
+        print(f"[PDF EXTRACT ERROR] {str(e)}")
         traceback.print_exc()
         return jsonify({"error": f"Failed to extract data from PDF: {str(e)}"}), 500
 
@@ -567,11 +677,13 @@ def generate_seating_plan():
     data = request.json
     exam_date = data['exam_date']
     exam_session = data['exam_session']
+    exam_type = data.get('exam_type', 'external')  # 'internal' or 'external'
 
     # DEBUG: Print received parameters
     print('[DEBUG] Received parameters:')
     print(f'  exam_date = {repr(exam_date)} (type: {type(exam_date).__name__})')
     print(f'  exam_session = {repr(exam_session)} (type: {type(exam_session).__name__})')
+    print(f'  exam_type = {repr(exam_type)} (type: {type(exam_type).__name__})')
 
     conn = mysql.connector.connect(**db_config)
     try:
@@ -617,14 +729,14 @@ def generate_seating_plan():
         print(f"   - Found {len(registrations)} student registrations across {len(students_by_subject)} subjects.")
 
         # 3. Run the seating algorithm
-        print('[EXAM_SERVICE] ⚙️ Starting seating arrangement algorithm...')
-        seating_plan = arrange_seats(rooms_data, students_by_subject)
+        print(f'[EXAM_SERVICE] Starting seating arrangement algorithm for {exam_type} exam...')
+        seating_plan = arrange_seats(rooms_data, students_by_subject, exam_type)
 
-        print('[EXAM_SERVICE] ➡ Sending response back to the gateway...')
+        print('[EXAM_SERVICE] Sending response back to the gateway...')
         return jsonify(seating_plan)
 
     except Exception as e:
-        print(f"[EXAM_SERVICE] ❌ An error occurred:")
+        print(f"[EXAM_SERVICE] ERROR - An error occurred:")
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
     finally:

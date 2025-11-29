@@ -73,6 +73,14 @@ export default function AdminDashboard() {
       href: '/admin/notifications',
       color: 'indigo',
       stats: 'Announce & Inform'
+    },
+    {
+      title: 'Performance Analysis',
+      description: 'Analyze student performance with comprehensive analytics and visualizations',
+      icon: ChartBarIcon,
+      href: '/admin/performance-analysis',
+      color: 'emerald',
+      stats: 'View Analytics'
     }
   ];
 
@@ -191,6 +199,15 @@ export default function AdminDashboard() {
                     <p className="text-xl font-bold">VTU Settings</p>
                   </div>
                   <p className="text-sm text-blue-100">Configure portal</p>
+                </div>
+              </Link>
+              <Link href="/admin/performance-analysis">
+                <div className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-xl p-6 text-left transition-all cursor-pointer transform hover:scale-105">
+                  <div className="flex items-center gap-3 mb-2">
+                    <ChartBarIcon className="h-8 w-8" />
+                    <p className="text-xl font-bold">Performance Analysis</p>
+                  </div>
+                  <p className="text-sm text-blue-100">View analytics</p>
                 </div>
               </Link>
             </div>

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { UserGroupIcon, PlusIcon, TrashIcon, ArrowLeftIcon, DocumentArrowUpIcon, CloudArrowUpIcon } from '@heroicons/react/24/outline';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Student {
   registration_id: number;
@@ -19,6 +20,7 @@ interface ExtractedStudent {
 }
 
 export default function ManageRegistrationsPage() {
+  const { token } = useAuth();
   const searchParams = useSearchParams();
   const examId = searchParams.get('exam_id');
   const subjectCode = searchParams.get('subject_code');
@@ -42,14 +44,21 @@ export default function ManageRegistrationsPage() {
   const [isCreatingStudents, setIsCreatingStudents] = useState(false);
 
   useEffect(() => {
-    if (examId) {
+    if (examId && token) {
       fetchRegistrations();
     }
-  }, [examId]);
+  }, [examId, token]);
 
   const fetchRegistrations = async () => {
+    if (!token) return;
+
     try {
-      const response = await fetch(`http://localhost:5001/exams/${examId}/registrations`);
+      const response = await fetch(`http://localhost:5001/exams/${examId}/registrations`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       const data = await response.json();
       // Ensure data is an array
       if (Array.isArray(data)) {
@@ -76,11 +85,15 @@ export default function ManageRegistrationsPage() {
 
   const handleSingleRegistration = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!token) return;
 
     try {
       const response = await fetch('http://localhost:5001/registrations', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
           student_usn: singleUSN,
           exam_id: parseInt(examId!)
@@ -103,6 +116,7 @@ export default function ManageRegistrationsPage() {
 
   const handleBatchRegistration = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!token) return;
 
     // Parse USNs from textarea (comma or newline separated)
     const usnList = batchUSNs
@@ -118,7 +132,10 @@ export default function ManageRegistrationsPage() {
     try {
       const response = await fetch('http://localhost:5001/registrations/batch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
           exam_id: parseInt(examId!),
           student_usns: usnList
@@ -150,7 +167,7 @@ export default function ManageRegistrationsPage() {
   };
 
   const extractStudentsFromPdf = async () => {
-    if (!pdfFile) {
+    if (!pdfFile || !token) {
       showMessage('Please select a PDF file first', 'error');
       return;
     }
@@ -162,6 +179,9 @@ export default function ManageRegistrationsPage() {
     try {
       const response = await fetch('http://localhost:5001/extract-students-from-pdf', {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         body: formData
       });
 
@@ -181,7 +201,7 @@ export default function ManageRegistrationsPage() {
   };
 
   const createStudentsAndRegister = async () => {
-    if (extractedStudents.length === 0) {
+    if (extractedStudents.length === 0 || !token) {
       showMessage('No students to register', 'error');
       return;
     }
@@ -192,7 +212,10 @@ export default function ManageRegistrationsPage() {
       // Step 1: Create students in database
       const createResponse = await fetch('http://localhost:5001/students/batch-create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({ students: extractedStudents })
       });
 
@@ -205,7 +228,10 @@ export default function ManageRegistrationsPage() {
       const usnList = extractedStudents.map(s => s.usn);
       const registerResponse = await fetch('http://localhost:5001/registrations/batch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
           exam_id: parseInt(examId!),
           student_usns: usnList

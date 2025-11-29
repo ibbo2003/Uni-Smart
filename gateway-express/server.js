@@ -425,24 +425,67 @@ app.delete('/api/timetable/:sectionId', async (req, res) => {
     }
 });
 
+// Get all exam rooms
+app.get('/api/exams/rooms', async (req, res) => {
+    console.log('[GATEWAY] Received request to fetch exam rooms...');
+
+    // Extract authorization header from request
+    const authHeader = req.headers.authorization;
+    console.log('[DEBUG] Auth header:', authHeader ? 'Present' : 'Missing');
+
+    try {
+        const examServiceUrl = 'http://127.0.0.1:5001/rooms';
+        console.log(`[GATEWAY] --> Calling Python exam service to fetch rooms...`);
+
+        const response = await axios.get(examServiceUrl, {
+            headers: {
+                'Authorization': authHeader,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log('[GATEWAY] <-- Received response from Python service');
+        console.log(`[GATEWAY] Found ${response.data.length} rooms`);
+
+        res.json(response.data);
+    } catch (error) {
+        console.error('[GATEWAY] ERROR calling Python service:', error.message);
+        res.status(error.response?.status || 500).json({
+            error: error.message,
+            message: 'Failed to fetch exam rooms'
+        });
+    }
+});
+
 app.post('/api/exams/generate-seating', async (req, res) => {
     console.log('[GATEWAY] Received request to generate exam seating...');
-    const { exam_date, exam_session } = req.body;
+    const { exam_date, exam_session, exam_type } = req.body;
 
     // DEBUG: Print what we're sending to Python service
     console.log('[DEBUG] Request body received from frontend:');
     console.log(`  exam_date = ${JSON.stringify(exam_date)} (type: ${typeof exam_date})`);
     console.log(`  exam_session = ${JSON.stringify(exam_session)} (type: ${typeof exam_session})`);
+    console.log(`  exam_type = ${JSON.stringify(exam_type)} (type: ${typeof exam_type})`);
+
+    // Extract authorization header from request
+    const authHeader = req.headers.authorization;
+    console.log('[DEBUG] Auth header:', authHeader ? 'Present' : 'Missing');
 
     let connection;
     try {
         const examServiceUrl = 'http://127.0.0.1:5001/generate_seating';
         console.log(`[GATEWAY] --> Calling Python exam service...`);
 
-        const payload = { exam_date, exam_session };
+        const payload = { exam_date, exam_session, exam_type };
         console.log('[DEBUG] Payload being sent to Python:', JSON.stringify(payload));
 
-        const response = await axios.post(examServiceUrl, payload);
+        // Forward the authorization header to Python service
+        const headers = {};
+        if (authHeader) {
+            headers['Authorization'] = authHeader;
+        }
+
+        const response = await axios.post(examServiceUrl, payload, { headers });
         const seatingPlan = response.data;
 
         console.log(`[GATEWAY] Received seating plan for ${seatingPlan.length} students.`);
@@ -451,7 +494,7 @@ app.post('/api/exams/generate-seating', async (req, res) => {
         // Save the seating plan to the database
         if (seatingPlan.length > 0) {
             connection = await mysql.createConnection(dbConfig);
-            console.log('[GATEWAY] Saving seating plan to the database...');
+            console.log(`[GATEWAY] Saving seating plan to the database (Exam Type: ${exam_type})...`);
 
             // 1. Get all unique subject codes from the generated plan
             const subjectCodes = [...new Set(seatingPlan.map(s => s.subject_code))];
@@ -465,25 +508,66 @@ app.post('/api/exams/generate-seating', async (req, res) => {
             const examIdMap = new Map(examRows.map(e => [e.subject_code, e.id]));
             const examIdsToDelete = Array.from(examIdMap.values());
 
-            // 3. Delete any old seating plan for these exams to avoid conflicts
+            // 3. Delete any old seating plan for these exams from appropriate table
             if (examIdsToDelete.length > 0) {
                 const deletePlaceholders = examIdsToDelete.map(() => '?').join(',');
-                await connection.execute(`DELETE FROM exam_seating_plan WHERE exam_id IN (${deletePlaceholders})`, examIdsToDelete);
-                console.log(`[GATEWAY] Cleared old seating plan for ${examIdsToDelete.length} exams.`);
+
+                if (exam_type === 'internal') {
+                    await connection.execute(`DELETE FROM internal_exam_seating_plan WHERE exam_id IN (${deletePlaceholders})`, examIdsToDelete);
+                    console.log(`[GATEWAY] Cleared old INTERNAL seating plan for ${examIdsToDelete.length} exams.`);
+                } else {
+                    await connection.execute(`DELETE FROM exam_seating_plan WHERE exam_id IN (${deletePlaceholders})`, examIdsToDelete);
+                    console.log(`[GATEWAY] Cleared old EXTERNAL seating plan for ${examIdsToDelete.length} exams.`);
+                }
             }
 
-            // 4. Prepare and insert the new seating plan data
-            const valuesToInsert = seatingPlan.map(seat => [
-                seat.student_usn,
-                examIdMap.get(seat.subject_code), // Get the correct exam_id
-                seat.room_id,
-                seat.row_num,
-                seat.col_num
-            ]);
+            // 4. Prepare and insert the new seating plan data into appropriate table
+            if (exam_type === 'internal') {
+                // For internal exams, track seat_position (1 or 2)
+                // Group by seat location to assign positions
+                const seatMap = new Map();
 
-            const insertQuery = `INSERT INTO exam_seating_plan (student_usn, exam_id, room_id, row_num, col_num) VALUES ?`;
-            await connection.query(insertQuery, [valuesToInsert]);
-            console.log(`[GATEWAY] Successfully saved ${valuesToInsert.length} new seat assignments.`);
+                seatingPlan.forEach(seat => {
+                    const seatKey = `${seat.room_id}-${seat.row_num}-${seat.col_num}`;
+                    if (!seatMap.has(seatKey)) {
+                        seatMap.set(seatKey, []);
+                    }
+                    seatMap.get(seatKey).push(seat);
+                });
+
+                const valuesToInsert = [];
+                seatMap.forEach(students => {
+                    students.forEach((seat, index) => {
+                        valuesToInsert.push([
+                            seat.student_usn,
+                            examIdMap.get(seat.subject_code),
+                            seat.room_id,
+                            seat.row_num,
+                            seat.col_num,
+                            index + 1  // seat_position: 1 for first student, 2 for second
+                        ]);
+                    });
+                });
+
+                const insertQuery = `INSERT INTO internal_exam_seating_plan
+                    (student_usn, exam_id, room_id, row_num, col_num, seat_position) VALUES ?`;
+                await connection.query(insertQuery, [valuesToInsert]);
+                console.log(`[GATEWAY] Successfully saved ${valuesToInsert.length} INTERNAL seat assignments.`);
+            } else {
+                // For external exams, use the original table
+                const valuesToInsert = seatingPlan.map(seat => [
+                    seat.student_usn,
+                    examIdMap.get(seat.subject_code),
+                    seat.room_id,
+                    seat.row_num,
+                    seat.col_num
+                ]);
+
+                const insertQuery = `INSERT INTO exam_seating_plan
+                    (student_usn, exam_id, room_id, row_num, col_num) VALUES ?`;
+                await connection.query(insertQuery, [valuesToInsert]);
+                console.log(`[GATEWAY] Successfully saved ${valuesToInsert.length} EXTERNAL seat assignments.`);
+            }
         }
         
         res.status(200).json({
@@ -636,6 +720,7 @@ app.get('/api/results/student/:email', async (req, res) => {
 /**
  * GET /api/exams/seating/student/:email
  * Get exam seating arrangements for a specific student
+ * Supports both internal and external exams
  * Security: Students can only access their own seating via email
  */
 app.get('/api/exams/seating/student/:email', async (req, res) => {
@@ -661,8 +746,8 @@ app.get('/api/exams/seating/student/:email', async (req, res) => {
 
         const studentUsn = students[0].usn;
 
-        // Get seating arrangements for this student
-        const [seatingData] = await connection.execute(
+        // Get external exam seating arrangements
+        const [externalSeating] = await connection.execute(
             `SELECT
                 esp.student_usn,
                 e.subject_code,
@@ -670,15 +755,41 @@ app.get('/api/exams/seating/student/:email', async (req, res) => {
                 esp.row_num,
                 esp.col_num,
                 e.exam_date,
-                e.exam_session
+                e.exam_session,
+                'external' as exam_type,
+                NULL as seat_position
              FROM exam_seating_plan esp
-             JOIN exams e ON esp.exam_id = e.exam_id
-             WHERE esp.student_usn = ?
-             ORDER BY e.exam_date, e.exam_session`,
+             JOIN exams e ON esp.exam_id = e.id
+             WHERE esp.student_usn = ?`,
             [studentUsn]
         );
 
-        res.json(seatingData);
+        // Get internal exam seating arrangements
+        const [internalSeating] = await connection.execute(
+            `SELECT
+                iesp.student_usn,
+                e.subject_code,
+                iesp.room_id,
+                iesp.row_num,
+                iesp.col_num,
+                e.exam_date,
+                e.exam_session,
+                'internal' as exam_type,
+                iesp.seat_position
+             FROM internal_exam_seating_plan iesp
+             JOIN exams e ON iesp.exam_id = e.id
+             WHERE iesp.student_usn = ?`,
+            [studentUsn]
+        );
+
+        // Combine both results and sort by date and session
+        const combinedSeating = [...externalSeating, ...internalSeating].sort((a, b) => {
+            const dateCompare = new Date(a.exam_date) - new Date(b.exam_date);
+            if (dateCompare !== 0) return dateCompare;
+            return a.exam_session.localeCompare(b.exam_session);
+        });
+
+        res.json(combinedSeating);
 
     } catch (error) {
         console.error('[GATEWAY] Error fetching exam seating:', error);

@@ -21,7 +21,9 @@ from .views import (
     VTUSemesterURLViewSet, NotificationViewSet,
     # Real-time analytics views
     subject_analytics_view, batch_analytics_view,
-    department_overview_view, student_comparison_view
+    department_overview_view, student_comparison_view,
+    # Performance analysis views
+    comprehensive_performance_analysis, student_performance_report
 )
 
 # Create router and register viewsets
@@ -53,6 +55,10 @@ urlpatterns = [
     path('analytics/batch/', batch_analytics_view, name='analytics_batch'),
     path('analytics/department/', department_overview_view, name='analytics_department'),
     path('analytics/compare/', student_comparison_view, name='analytics_compare'),
+
+    # Performance Analysis endpoints
+    path('analytics/performance/', comprehensive_performance_analysis, name='performance_analysis'),
+    path('analytics/student-report/', student_performance_report, name='student_report'),
 
     # System Settings endpoints
     path('settings/', views.get_all_settings, name='get_all_settings'),

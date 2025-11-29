@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { BuildingOfficeIcon, PlusIcon, PencilIcon, TrashIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Room {
   id: string;
@@ -12,6 +13,7 @@ interface Room {
 }
 
 export default function ManageRoomsPage() {
+  const { token } = useAuth();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -27,12 +29,21 @@ export default function ManageRoomsPage() {
   });
 
   useEffect(() => {
-    fetchRooms();
-  }, []);
+    if (token) {
+      fetchRooms();
+    }
+  }, [token]);
 
   const fetchRooms = async () => {
+    if (!token) return;
+
     try {
-      const response = await fetch('http://localhost:5001/rooms');
+      const response = await fetch('http://localhost:5001/rooms', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       const data = await response.json();
       // Ensure data is an array
       if (Array.isArray(data)) {
@@ -59,13 +70,17 @@ export default function ManageRoomsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!token) return;
 
     try {
       if (editingRoom) {
         // Update existing room
         const response = await fetch(`http://localhost:5001/rooms/${editingRoom.id}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
           body: JSON.stringify({
             num_rows: formData.num_rows,
             num_cols: formData.num_cols
@@ -78,7 +93,10 @@ export default function ManageRoomsPage() {
         // Create new room
         const response = await fetch('http://localhost:5001/rooms', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
           body: JSON.stringify(formData)
         });
 
@@ -98,10 +116,15 @@ export default function ManageRoomsPage() {
 
   const handleDelete = async (roomId: string) => {
     if (!confirm(`Are you sure you want to delete room ${roomId}?`)) return;
+    if (!token) return;
 
     try {
       const response = await fetch(`http://localhost:5001/rooms/${roomId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
 
       if (!response.ok) throw new Error('Failed to delete room');
