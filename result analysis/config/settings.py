@@ -350,18 +350,18 @@ if not DEBUG:
 # Jazzmin Configuration - Modern Admin UI
 JAZZMIN_SETTINGS = {
     # Site title and branding
-    "site_title": "Uni-Smart",
-    "site_header": "Uni-Smart",
-    "site_brand": "Uni-Smart Admin",
+    "site_title": "UniSmart",
+    "site_header": "UniSmart",
+    "site_brand": "UniSmart Admin",
     "site_logo": None,
     "site_logo_classes": "img-circle",
     "site_icon": None,
 
     # Welcome text on the login screen
-    "welcome_sign": "Welcome to Uni-Smart",
+    "welcome_sign": "Welcome to UniSmart",
 
     # Copyright on the footer
-    "copyright": "Uni-Smart University System",
+    "copyright": "UniSmart University System",
 
     # Search model for navbar search
     "search_model": ["results.Student", "results.User"],

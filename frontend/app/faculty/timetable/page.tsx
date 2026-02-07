@@ -3,7 +3,9 @@
 import { useState, useEffect, Fragment } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import FacultyNav from '../components/FacultyNav';
+import { DashboardLayout } from '@/components/modern/DashboardLayout';
+import { PageHeader } from '@/components/modern/PageHeader';
+import { Card } from '@/components/modern/Card';
 import {
   CalendarIcon,
   ClockIcon,
@@ -244,60 +246,61 @@ export default function FacultyTimetablePage() {
 
   return (
     <ProtectedRoute allowedRoles={['FACULTY']}>
-      <div className="min-h-screen bg-gray-50">
-        <FacultyNav />
+      <DashboardLayout>
+        <PageHeader
+          title="My Timetable"
+          description="View all your scheduled classes across sections"
+          showBack={true}
+          backTo="/faculty/dashboard"
+          icon={<CalendarIcon className="h-8 w-8" />}
+        />
 
-        <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold text-gray-800 mb-2">My Timetable</h1>
-            <p className="text-gray-600">View all your scheduled classes across sections</p>
-            {facultyInfo && (
-              <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <div className="flex items-center gap-3">
-                  <AcademicCapIcon className="h-6 w-6 text-blue-600" />
-                  <div>
-                    <p className="font-semibold text-blue-900">{facultyInfo.name}</p>
-                    <p className="text-sm text-blue-700">{facultyInfo.designation} • {facultyInfo.department?.name || 'N/A'}</p>
-                  </div>
-                </div>
+        {facultyInfo && (
+          <Card className="mb-6 bg-blue-50 border-l-4 border-l-blue-500">
+            <div className="flex items-center gap-3">
+              <AcademicCapIcon className="h-6 w-6 text-blue-600" />
+              <div>
+                <p className="font-semibold text-blue-900">{facultyInfo.name}</p>
+                <p className="text-sm text-blue-700">{facultyInfo.designation} • {facultyInfo.department?.name || 'N/A'}</p>
               </div>
-            )}
-          </div>
-
-          {/* Loading State */}
-          {isLoading && (
-            <div className="bg-white rounded-xl shadow-lg p-12 text-center">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading your timetable...</p>
             </div>
-          )}
+          </Card>
+        )}
 
-          {/* Error State */}
-          {error && !isLoading && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-              <p className="text-red-800 font-medium">{error}</p>
-              <button
-                onClick={loadFacultyTimetable}
-                className="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-              >
-                Retry
-              </button>
-            </div>
-          )}
+        {/* Loading State */}
+        {isLoading && (
+          <Card className="p-12 text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading your timetable...</p>
+          </Card>
+        )}
 
-          {/* No Classes */}
-          {!isLoading && !error && timetable.length === 0 && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-8 text-center">
-              <CalendarIcon className="h-16 w-16 text-yellow-600 mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-gray-800 mb-2">No Classes Scheduled</h2>
-              <p className="text-gray-700">You don't have any classes scheduled yet. Timetables will appear here once they are generated.</p>
-            </div>
-          )}
+        {/* Error State */}
+        {error && !isLoading && (
+          <Card className="bg-red-50 border-l-4 border-l-red-500 text-center">
+            <p className="text-red-800 font-medium">{error}</p>
+            <button
+              onClick={loadFacultyTimetable}
+              className="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Retry
+            </button>
+          </Card>
+        )}
 
-          {/* Timetable Grid */}
-          {!isLoading && !error && timetable.length > 0 && (
-            <div className="bg-white rounded-xl shadow-lg p-8">
+        {/* No Classes */}
+        {!isLoading && !error && timetable.length === 0 && (
+          <Card className="p-8 text-center bg-yellow-50 border-l-4 border-l-yellow-500">
+            <CalendarIcon className="h-16 w-16 text-yellow-600 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-gray-800 mb-2">No Classes Scheduled</h2>
+            <p className="text-gray-700">You don't have any classes scheduled yet. Timetables will appear here once they are generated.</p>
+          </Card>
+        )}
+
+        {/* Timetable Grid */}
+        {!isLoading && !error && timetable.length > 0 && (
+          <Card noPadding>
+            <div className="p-8">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-gray-800">My Class Schedule</h2>
                 <div className="flex gap-4 text-sm">
@@ -497,9 +500,11 @@ export default function FacultyTimetablePage() {
                   </tbody>
                 </table>
               </div>
+            </div>
 
-              {/* Statistics */}
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Statistics */}
+            <div className="p-8 pt-0">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                   <div className="text-sm font-medium text-green-700">Theory Classes</div>
                   <div className="text-2xl font-bold text-green-800">
@@ -544,9 +549,9 @@ export default function FacultyTimetablePage() {
                 </div>
               </div>
             </div>
-          )}
-        </main>
-      </div>
+          </Card>
+        )}
+      </DashboardLayout>
     </ProtectedRoute>
   );
 }

@@ -10,6 +10,11 @@ import {
 } from '@heroicons/react/24/outline';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { RoleGuard } from '@/components/RoleGuard';
+import { DashboardLayout } from '@/components/modern/DashboardLayout';
+import { PageHeader } from '@/components/modern/PageHeader';
+import { Card } from '@/components/modern/Card';
+import { Button } from '@/components/modern/Button';
+import { showToast } from '@/lib/toast';
 import { useAuth } from '@/contexts/AuthContext';
 
 // --- INTERFACES ---
@@ -155,8 +160,11 @@ export default function ExamSeatingPage() {
 
         setMessage(result.message);
         setSeatingPlan(result.seatingPlan);
+        showToast.success('Seating plan generated successfully!');
     } catch (error: any) {
-        setMessage(error.message || 'An error occurred during seating generation');
+        const errorMsg = error.message || 'An error occurred during seating generation';
+        setMessage(errorMsg);
+        showToast.error(errorMsg);
     } finally {
         setIsLoading(false);
     }
@@ -185,52 +193,56 @@ export default function ExamSeatingPage() {
           }
         }
       `}</style>
-      <main className="container mx-auto p-8 print:p-0">
-        {/* Page Header */}
-        <div className="mb-10 print:hidden">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">Exam Seating Arrangement</h1>
-          <p className="text-gray-600">Manage exam rooms, schedule exams, and generate seating arrangements</p>
-        </div>
+      <DashboardLayout>
+        <div className="print:p-0">
+          <PageHeader
+            title="Exam Seating Arrangement"
+            description="Manage exam rooms, schedule exams, and generate seating arrangements"
+            showBack={true}
+            backTo="/admin"
+            icon={<RocketLaunchIcon className="h-8 w-8" />}
+            className="print:hidden"
+          />
 
-      {/* Management Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 print:hidden">
-        {/* Manage Rooms Card */}
-        <Link href="/exam-seating/manage-rooms">
-          <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all duration-300 cursor-pointer border-2 border-transparent hover:border-blue-500">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <BuildingOfficeIcon className="h-8 w-8 text-blue-600" />
+          {/* Management Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 print:hidden">
+            {/* Manage Rooms Card */}
+            <Link href="/exam-seating/manage-rooms">
+              <Card hover className="border-2 border-transparent hover:border-blue-500 cursor-pointer">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="p-3 bg-blue-100 rounded-lg">
+                    <BuildingOfficeIcon className="h-8 w-8 text-blue-600" />
+                  </div>
+                </div>
+                <h3 className="text-xl font-bold text-gray-800 mb-2">Manage Rooms</h3>
+                <p className="text-gray-600 text-sm">Add, edit, or remove exam rooms and configure their seating layouts</p>
+              </Card>
+            </Link>
+
+            {/* Manage Exams Card */}
+            <Link href="/exam-seating/manage-exams">
+              <Card hover className="border-2 border-transparent hover:border-green-500 cursor-pointer">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="p-3 bg-green-100 rounded-lg">
+                    <CalendarIcon className="h-8 w-8 text-green-600" />
+                  </div>
+                </div>
+                <h3 className="text-xl font-bold text-gray-800 mb-2">Manage Exams</h3>
+                <p className="text-gray-600 text-sm">Schedule exams, set dates and sessions, and manage student registrations</p>
+              </Card>
+            </Link>
+
+            {/* Quick Stats Card */}
+            <Card className="bg-gradient-to-br from-purple-500 to-indigo-600 text-white">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-white bg-opacity-20 rounded-lg">
+                  <ClipboardDocumentListIcon className="h-8 w-8 text-white" />
+                </div>
               </div>
-            </div>
-            <h3 className="text-xl font-bold text-gray-800 mb-2">Manage Rooms</h3>
-            <p className="text-gray-600 text-sm">Add, edit, or remove exam rooms and configure their seating layouts</p>
+              <h3 className="text-xl font-bold mb-2">Quick Info</h3>
+              <p className="text-sm text-purple-100">Generate seating arrangements below after setting up rooms and registering students</p>
+            </Card>
           </div>
-        </Link>
-
-        {/* Manage Exams Card */}
-        <Link href="/exam-seating/manage-exams">
-          <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all duration-300 cursor-pointer border-2 border-transparent hover:border-green-500">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-green-100 rounded-lg">
-                <CalendarIcon className="h-8 w-8 text-green-600" />
-              </div>
-            </div>
-            <h3 className="text-xl font-bold text-gray-800 mb-2">Manage Exams</h3>
-            <p className="text-gray-600 text-sm">Schedule exams, set dates and sessions, and manage student registrations</p>
-          </div>
-        </Link>
-
-        {/* Quick Stats Card */}
-        <div className="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl shadow-lg p-6 text-white">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-white bg-opacity-20 rounded-lg">
-              <ClipboardDocumentListIcon className="h-8 w-8 text-white" />
-            </div>
-          </div>
-          <h3 className="text-xl font-bold mb-2">Quick Info</h3>
-          <p className="text-sm text-purple-100">Generate seating arrangements below after setting up rooms and registering students</p>
-        </div>
-      </div>
 
       {/* Generate Seating Section */}
       <RoleGuard
@@ -241,7 +253,7 @@ export default function ExamSeatingPage() {
           </div>
         }
       >
-        <div className="bg-white rounded-xl shadow-lg p-8 mb-10 print:hidden">
+        <Card className="mb-10 print:hidden">
           <div className="flex items-center mb-6">
             <RocketLaunchIcon className="h-8 w-8 text-blue-600 mr-3" />
             <h2 className="text-2xl font-bold text-gray-800">Generate Seating Arrangement</h2>
@@ -269,9 +281,9 @@ export default function ExamSeatingPage() {
                   </select>
               </div>
               <div className="flex items-end">
-                <button type="submit" disabled={isLoading} className="w-full bg-green-600 text-white p-2 rounded-md font-semibold hover:bg-green-700 disabled:bg-gray-400">
-                    {isLoading ? 'Generating...' : 'Generate Seating Plan'}
-                </button>
+                <Button variant="success" type="submit" disabled={isLoading} loading={isLoading} className="w-full">
+                    Generate Seating Plan
+                </Button>
               </div>
           </div>
 
@@ -294,7 +306,7 @@ export default function ExamSeatingPage() {
             </div>
           )}
         </form>
-        </div>
+        </Card>
 
         {/* Display Grid */}
         {seatingPlan.length > 0 && (
@@ -356,7 +368,8 @@ export default function ExamSeatingPage() {
           </div>
         )}
       </RoleGuard>
-      </main>
+        </div>
+      </DashboardLayout>
     </ProtectedRoute>
   );
 }

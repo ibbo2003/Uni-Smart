@@ -3,6 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { DashboardLayout } from '@/components/modern/DashboardLayout';
+import { PageHeader } from '@/components/modern/PageHeader';
+import { Card } from '@/components/modern/Card';
+import { Button } from '@/components/modern/Button';
 import {
   LinkIcon,
   CheckCircleIcon,
@@ -12,7 +17,8 @@ import {
   ClockIcon,
   GlobeAltIcon,
   AcademicCapIcon,
-  CalendarIcon
+  CalendarIcon,
+  Cog6ToothIcon
 } from '@heroicons/react/24/outline';
 
 const API_BASE_URL = 'http://localhost:8001/api';
@@ -260,16 +266,18 @@ export default function VTUSettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">VTU Portal Settings</h1>
-          <p className="text-gray-600">Manage VTU result portal URLs - semester-wise configuration</p>
-        </div>
+    <ProtectedRoute allowedRoles={['ADMIN']}>
+      <DashboardLayout>
+        <PageHeader
+          title="VTU Portal Settings"
+          description="Manage VTU result portal URLs - semester-wise configuration"
+          showBack={true}
+          backTo="/admin"
+          icon={<Cog6ToothIcon className="h-8 w-8" />}
+        />
 
         {/* Info Alert */}
-        <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6 rounded-r-lg">
+        <Card className="mb-6 bg-blue-50 border-l-4 border-l-blue-500">
           <div className="flex items-start gap-3">
             <ExclamationTriangleIcon className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" />
             <div>
@@ -286,10 +294,10 @@ export default function VTUSettingsPage() {
               </p>
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Semester-wise URL Management (Primary) */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+        <Card className="mb-6">
           <div className="flex items-center gap-3 mb-6">
             <AcademicCapIcon className="w-6 h-6 text-indigo-600" />
             <h2 className="text-2xl font-bold text-gray-900">Semester-wise URL Configuration</h2>
@@ -436,23 +444,19 @@ export default function VTUSettingsPage() {
               </div>
 
               {/* Update Button */}
-              <button
+              <Button
+                variant="primary"
                 onClick={handleBulkUpdateSemesters}
                 disabled={loadingSemester || !bulkURL.trim() || selectedSemesters.length === 0}
-                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-lg"
+                loading={loadingSemester}
+                icon={!loadingSemester && <CheckCircleIcon className="w-5 h-5" />}
+                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600"
               >
-                {loadingSemester ? (
-                  <>
-                    <ArrowPathIcon className="w-5 h-5 animate-spin" />
-                    Updating Semesters...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircleIcon className="w-5 h-5" />
-                    Update {selectedSemesters.length} Semester{selectedSemesters.length > 1 ? 's' : ''}
-                  </>
-                )}
-              </button>
+                {loadingSemester
+                  ? 'Updating Semesters...'
+                  : `Update ${selectedSemesters.length} Semester${selectedSemesters.length > 1 ? 's' : ''}`
+                }
+              </Button>
             </div>
           </div>
 
@@ -520,10 +524,10 @@ export default function VTUSettingsPage() {
               </table>
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Legacy Single URL (Fallback) */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+        <Card className="mb-6">
           <div className="flex items-center gap-3 mb-4">
             <GlobeAltIcon className="w-6 h-6 text-gray-600" />
             <h2 className="text-2xl font-bold text-gray-900">Fallback URL (Legacy)</h2>
@@ -592,29 +596,31 @@ export default function VTUSettingsPage() {
                 </div>
 
                 <div className="flex gap-3">
-                  <button
+                  <Button
+                    variant="primary"
                     onClick={testURL}
                     disabled={!currentURL}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
                   >
                     Test URL
-                  </button>
+                  </Button>
 
-                  <button
+                  <Button
+                    variant="secondary"
                     onClick={handleUpdateURL}
                     disabled={loading || !newURL.trim() || newURL === currentURL}
-                    className="flex-1 bg-gray-600 text-white py-2 px-6 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-all"
+                    loading={loading}
+                    className="flex-1"
                   >
                     {loading ? 'Updating...' : 'Update Fallback URL'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </>
           )}
-        </div>
+        </Card>
 
         {/* How it Works */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
+        <Card>
           <h2 className="text-xl font-bold text-gray-900 mb-4">How Semester-wise URLs Work</h2>
           <div className="space-y-3 text-sm text-gray-700">
             <div className="flex items-start gap-3">
@@ -689,8 +695,7 @@ export default function VTUSettingsPage() {
               </div>
             </div>
           </div>
-        </div>
-      </div>
+        </Card>
 
       {/* Confirmation Modal */}
       {showConfirmModal && (
@@ -717,22 +722,25 @@ export default function VTUSettingsPage() {
             </div>
 
             <div className="flex items-center gap-3">
-              <button
+              <Button
+                variant="secondary"
                 onClick={() => setShowConfirmModal(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex-1"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
                 onClick={confirmUpdate}
-                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold"
+                className="flex-1 bg-purple-600 hover:bg-purple-700"
               >
                 Confirm Update
-              </button>
+              </Button>
             </div>
           </div>
         </div>
       )}
-    </div>
+      </DashboardLayout>
+    </ProtectedRoute>
   );
 }

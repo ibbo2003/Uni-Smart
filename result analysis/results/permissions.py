@@ -1,7 +1,7 @@
 """
 Custom Permission Classes for Role-Based Access Control (RBAC)
 
-This module implements comprehensive RBAC for the Uni-Smart Result Analysis system.
+This module implements comprehensive RBAC for the UniSmart Result Analysis system.
 Three roles: ADMIN, FACULTY, STUDENT
 
 Access patterns:

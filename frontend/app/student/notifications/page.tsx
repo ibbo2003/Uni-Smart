@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import StudentNav from '../components/StudentNav';
+import { DashboardLayout } from '@/components/modern/DashboardLayout';
+import { PageHeader } from '@/components/modern/PageHeader';
+import { Card } from '@/components/modern/Card';
 import { BellIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api';
@@ -93,38 +95,35 @@ export default function StudentNotifications() {
 
   return (
     <ProtectedRoute allowedRoles={['STUDENT']}>
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        <StudentNav />
+      <DashboardLayout>
+        <PageHeader
+          title="Notifications"
+          description="Stay updated with important announcements"
+          showBack={true}
+          backTo="/student/dashboard"
+          icon={<BellIcon className="h-8 w-8" />}
+        />
 
-        <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <BellIcon className="h-8 w-8 text-indigo-600" />
-              Notifications
-            </h1>
-            <p className="text-gray-600 mt-2">Stay updated with important announcements</p>
+        {isLoading ? (
+          <div className="text-center py-20">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            <p className="mt-4 text-gray-600 text-lg">Loading notifications...</p>
           </div>
-
-          {isLoading ? (
-            <div className="text-center py-20">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-              <p className="mt-4 text-gray-600 text-lg">Loading notifications...</p>
-            </div>
-          ) : notifications.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-lg p-12 text-center">
-              <BellIcon className="h-20 w-20 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-gray-700 mb-2">No notifications</h3>
-              <p className="text-gray-500">You're all caught up! There are no new notifications at the moment.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {notifications.map((notification) => {
-                const colors = getPriorityColor(notification.priority);
-                return (
-                  <div
-                    key={notification.id}
-                    className={`${colors.bg} border-l-4 ${colors.border} rounded-lg shadow-md p-6 transition-all hover:shadow-lg`}
-                  >
+        ) : notifications.length === 0 ? (
+          <Card className="p-12 text-center">
+            <BellIcon className="h-20 w-20 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-gray-700 mb-2">No notifications</h3>
+            <p className="text-gray-500">You're all caught up! There are no new notifications at the moment.</p>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {notifications.map((notification) => {
+              const colors = getPriorityColor(notification.priority);
+              return (
+                <Card
+                  key={notification.id}
+                  className={`${colors.bg} border-l-4 ${colors.border} transition-all hover:shadow-lg`}
+                >
                     <div className="flex items-start gap-4">
                       <div className={`${colors.icon} mt-1`}>
                         <InformationCircleIcon className="h-6 w-6" />
@@ -165,13 +164,12 @@ export default function StudentNotifications() {
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </Card>
                 );
               })}
             </div>
           )}
-        </main>
-      </div>
+      </DashboardLayout>
     </ProtectedRoute>
   );
 }

@@ -4,6 +4,11 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { UserGroupIcon, PlusIcon, TrashIcon, ArrowLeftIcon, DocumentArrowUpIcon, CloudArrowUpIcon } from '@heroicons/react/24/outline';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { DashboardLayout } from '@/components/modern/DashboardLayout';
+import { PageHeader } from '@/components/modern/PageHeader';
+import { Card, StatCard } from '@/components/modern/Card';
+import { Button } from '@/components/modern/Button';
+import { showToast } from '@/lib/toast';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Student {
@@ -80,6 +85,11 @@ export default function ManageRegistrationsPage() {
   const showMessage = (msg: string, type: 'success' | 'error') => {
     setMessage(msg);
     setMessageType(type);
+    if (type === 'success') {
+      showToast.success(msg);
+    } else {
+      showToast.error(msg);
+    }
     setTimeout(() => setMessage(''), 5000);
   };
 
@@ -263,56 +273,39 @@ export default function ManageRegistrationsPage() {
   if (!examId || !subjectCode) {
     return (
       <ProtectedRoute allowedRoles={['ADMIN']}>
-        <main className="container mx-auto p-8">
-          <div className="bg-red-100 text-red-800 p-6 rounded-lg">
+        <DashboardLayout>
+          <Card className="bg-red-100 text-red-800 p-6">
             <h2 className="text-xl font-bold mb-2">Error</h2>
             <p>Missing exam information. Please select an exam from the exams list.</p>
             <Link href="/exam-seating/manage-exams" className="text-blue-600 hover:underline mt-4 inline-block">
               Go to Manage Exams
             </Link>
-          </div>
-        </main>
+          </Card>
+        </DashboardLayout>
       </ProtectedRoute>
     );
   }
 
   return (
     <ProtectedRoute allowedRoles={['ADMIN']}>
-      <main className="container mx-auto p-8">
-      {/* Header */}
-      <div className="mb-8">
-        <Link href="/exam-seating/manage-exams" className="flex items-center text-blue-600 hover:text-blue-800 mb-2">
-          <ArrowLeftIcon className="h-5 w-5 mr-2" />
-          Back to Manage Exams
-        </Link>
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-800 flex items-center">
-              <UserGroupIcon className="h-8 w-8 mr-3 text-blue-600" />
-              Student Registrations
-            </h1>
-            <p className="text-gray-600 mt-2">
-              Subject: <span className="font-semibold">{subjectCode}</span> | Exam ID: <span className="font-semibold">{examId}</span>
-            </p>
-          </div>
-          <div className="flex space-x-3">
-            <button
-              onClick={() => setShowBatchModal(true)}
-              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-            >
-              <DocumentArrowUpIcon className="h-5 w-5 mr-2" />
-              Batch Register
-            </button>
-            <button
-              onClick={() => setShowModal(true)}
-              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <PlusIcon className="h-5 w-5 mr-2" />
-              Add Student
-            </button>
-          </div>
-        </div>
-      </div>
+      <DashboardLayout>
+        <PageHeader
+          title="Student Registrations"
+          description={`Subject: ${subjectCode} | Exam ID: ${examId}`}
+          showBack={true}
+          backTo="/exam-seating/manage-exams"
+          icon={<UserGroupIcon className="h-8 w-8" />}
+          actions={
+            <div className="flex space-x-3">
+              <Button variant="success" icon={<DocumentArrowUpIcon className="h-5 w-5" />} onClick={() => setShowBatchModal(true)}>
+                Batch Register
+              </Button>
+              <Button variant="primary" icon={<PlusIcon className="h-5 w-5" />} onClick={() => setShowModal(true)}>
+                Add Student
+              </Button>
+            </div>
+          }
+        />
 
       {/* Message Alert */}
       {message && (
@@ -323,42 +316,36 @@ export default function ManageRegistrationsPage() {
 
       {/* Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total Registered</p>
-              <p className="text-3xl font-bold text-blue-600">{students.length}</p>
-            </div>
-            <UserGroupIcon className="h-12 w-12 text-blue-600 opacity-20" />
-          </div>
-        </div>
+        <StatCard
+          title="Total Registered"
+          value={students.length}
+          icon={<UserGroupIcon className="h-6 w-6 text-white" />}
+          gradient="from-blue-500 to-blue-600"
+        />
       </div>
 
       {/* Students Table */}
       {loading ? (
-        <div className="text-center py-12">Loading registrations...</div>
+        <div className="text-center py-12">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">Loading registrations...</p>
+        </div>
       ) : students.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-md p-12 text-center">
+        <Card className="p-12 text-center">
           <UserGroupIcon className="h-16 w-16 mx-auto text-gray-400 mb-4" />
           <h3 className="text-xl font-semibold text-gray-700 mb-2">No Students Registered</h3>
           <p className="text-gray-500 mb-6">Start by registering students for this exam</p>
           <div className="flex justify-center space-x-4">
-            <button
-              onClick={() => setShowModal(true)}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
+            <Button variant="primary" onClick={() => setShowModal(true)}>
               Add Single Student
-            </button>
-            <button
-              onClick={() => setShowBatchModal(true)}
-              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-            >
+            </Button>
+            <Button variant="success" onClick={() => setShowBatchModal(true)}>
               Batch Register
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       ) : (
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <Card className="overflow-hidden" noPadding>
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -395,7 +382,7 @@ export default function ManageRegistrationsPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
 
       {/* Single Registration Modal */}
@@ -426,22 +413,12 @@ export default function ManageRegistrationsPage() {
               </div>
 
               <div className="flex space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowModal(false);
-                    setSingleUSN('');
-                  }}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
-                >
+                <Button variant="secondary" type="button" onClick={() => { setShowModal(false); setSingleUSN(''); }} className="flex-1">
                   Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                >
+                </Button>
+                <Button variant="primary" type="submit" className="flex-1">
                   Register Student
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -496,22 +473,12 @@ export default function ManageRegistrationsPage() {
                 </div>
 
                 <div className="flex space-x-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowBatchModal(false);
-                      setBatchUSNs('');
-                    }}
-                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
-                  >
+                  <Button variant="secondary" type="button" onClick={() => { setShowBatchModal(false); setBatchUSNs(''); }} className="flex-1">
                     Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                  >
+                  </Button>
+                  <Button variant="success" type="submit" className="flex-1">
                     Register All Students
-                  </button>
+                  </Button>
                 </div>
               </form>
             ) : (
@@ -590,7 +557,8 @@ export default function ManageRegistrationsPage() {
 
                 {/* Action Buttons */}
                 <div className="flex space-x-3 pt-4">
-                  <button
+                  <Button
+                    variant="secondary"
                     type="button"
                     onClick={() => {
                       setShowBatchModal(false);
@@ -598,17 +566,19 @@ export default function ManageRegistrationsPage() {
                       setExtractedStudents([]);
                       setShowPdfUpload(false);
                     }}
-                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+                    className="flex-1"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="success"
                     onClick={createStudentsAndRegister}
                     disabled={extractedStudents.length === 0 || isCreatingStudents}
-                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    loading={isCreatingStudents}
+                    className="flex-1"
                   >
                     {isCreatingStudents ? 'Processing...' : `Create & Register ${extractedStudents.length} Students`}
-                  </button>
+                  </Button>
                 </div>
 
                 {/* Info Box */}
@@ -623,7 +593,7 @@ export default function ManageRegistrationsPage() {
           </div>
         </div>
       )}
-      </main>
+      </DashboardLayout>
     </ProtectedRoute>
   );
 }

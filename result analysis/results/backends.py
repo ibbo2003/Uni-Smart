@@ -1,5 +1,5 @@
 """
-Custom Authentication Backend for Uni-Smart
+Custom Authentication Backend for UniSmart
 
 This backend allows:
 - Students and Faculty: Login with email + password

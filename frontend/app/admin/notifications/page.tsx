@@ -4,6 +4,11 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { DashboardLayout } from '@/components/modern/DashboardLayout';
+import { PageHeader } from '@/components/modern/PageHeader';
+import { Card } from '@/components/modern/Card';
+import { Button } from '@/components/modern/Button';
+import { showToast } from '@/lib/toast';
 import {
   BellIcon,
   PlusIcon,
@@ -135,18 +140,19 @@ export default function AdminNotifications() {
         loadNotifications();
         resetForm();
         setShowForm(false);
+        showToast.success(editingNotification ? 'Notification updated successfully!' : 'Notification created successfully!');
       } else {
         const error = await response.json();
-        alert(`Error: ${JSON.stringify(error)}`);
+        showToast.error(`Error: ${JSON.stringify(error)}`);
       }
     } catch (error) {
       console.error("Failed to save notification:", error);
-      alert("Failed to save notification");
+      showToast.error("Failed to save notification");
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this notification?")) return;
+    if (!window.confirm("Are you sure you want to delete this notification?")) return;
 
     try {
       const response = await fetch(`${API_BASE_URL}/notifications/${id}/`, {
@@ -158,9 +164,13 @@ export default function AdminNotifications() {
 
       if (response.ok) {
         loadNotifications();
+        showToast.success('Notification deleted successfully!');
+      } else {
+        showToast.error('Failed to delete notification');
       }
     } catch (error) {
       console.error("Failed to delete notification:", error);
+      showToast.error('Failed to delete notification');
     }
   };
 
@@ -222,30 +232,29 @@ export default function AdminNotifications() {
 
   return (
     <ProtectedRoute allowedRoles={['ADMIN', 'FACULTY']}>
-      <div className="min-h-screen bg-gray-50">
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex justify-between items-center mb-8">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-                <BellIcon className="h-8 w-8 text-indigo-600" />
-                Notifications Management
-              </h1>
-              <p className="text-gray-600 mt-2">Create and manage notifications for students</p>
-            </div>
-            <button
+      <DashboardLayout>
+        <PageHeader
+          title="Notifications Management"
+          description="Create and manage notifications for students"
+          showBack={true}
+          backTo="/admin"
+          icon={<BellIcon className="h-8 w-8" />}
+          actions={
+            <Button
+              variant="primary"
+              icon={<PlusIcon className="h-5 w-5" />}
               onClick={() => {
                 resetForm();
                 setShowForm(!showForm);
               }}
-              className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors"
             >
-              <PlusIcon className="h-5 w-5" />
               New Notification
-            </button>
-          </div>
+            </Button>
+          }
+        />
 
           {showForm && (
-            <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+            <Card className="mb-8">
               <h2 className="text-xl font-bold mb-4">
                 {editingNotification ? 'Edit Notification' : 'Create New Notification'}
               </h2>
@@ -343,25 +352,25 @@ export default function AdminNotifications() {
                 </div>
 
                 <div className="flex justify-end gap-3">
-                  <button
+                  <Button
+                    variant="secondary"
                     type="button"
                     onClick={() => {
                       setShowForm(false);
                       resetForm();
                     }}
-                    className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="primary"
                     type="submit"
-                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                   >
                     {editingNotification ? 'Update' : 'Create'} Notification
-                  </button>
+                  </Button>
                 </div>
               </form>
-            </div>
+            </Card>
           )}
 
           {isLoading ? (
@@ -370,15 +379,15 @@ export default function AdminNotifications() {
               <p className="mt-4 text-gray-600">Loading notifications...</p>
             </div>
           ) : notifications.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-md p-12 text-center">
+            <Card className="p-12 text-center">
               <BellIcon className="h-16 w-16 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-600 text-lg">No notifications yet</p>
               <p className="text-gray-500 mt-2">Create your first notification to get started</p>
-            </div>
+            </Card>
           ) : (
             <div className="space-y-4">
               {notifications.map((notification) => (
-                <div key={notification.id} className="bg-white rounded-lg shadow-md p-6">
+                <Card key={notification.id}>
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
@@ -431,12 +440,11 @@ export default function AdminNotifications() {
                       </button>
                     </div>
                   </div>
-                </div>
+                </Card>
               ))}
             </div>
           )}
-        </div>
-      </div>
+      </DashboardLayout>
     </ProtectedRoute>
   );
 }

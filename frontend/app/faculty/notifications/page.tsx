@@ -3,7 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import FacultyNav from '../components/FacultyNav';
+import { DashboardLayout } from '@/components/modern/DashboardLayout';
+import { PageHeader } from '@/components/modern/PageHeader';
+import { Card } from '@/components/modern/Card';
+import { Button } from '@/components/modern/Button';
+import { showToast } from '@/lib/toast';
 import {
   BellIcon,
   PlusIcon,
@@ -124,14 +128,14 @@ export default function FacultyNotifications() {
         loadNotifications();
         resetForm();
         setShowForm(false);
-        alert('Notification posted successfully!');
+        showToast.success('Notification posted successfully!');
       } else {
         const error = await response.json();
-        alert(`Error: ${JSON.stringify(error)}`);
+        showToast.error(`Error: ${JSON.stringify(error)}`);
       }
     } catch (error) {
       console.error("Failed to post notification:", error);
-      alert("Failed to post notification");
+      showToast.error("Failed to post notification");
     }
   };
 
@@ -188,32 +192,29 @@ export default function FacultyNotifications() {
 
   return (
     <ProtectedRoute allowedRoles={['FACULTY']}>
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        <FacultyNav />
-
-        <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex justify-between items-center mb-8">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-                <BellIcon className="h-8 w-8 text-indigo-600" />
-                Notifications
-              </h1>
-              <p className="text-gray-600 mt-2">Post notifications for students</p>
-            </div>
-            <button
+      <DashboardLayout>
+        <PageHeader
+          title="Notifications"
+          description="Post notifications for students"
+          showBack={true}
+          backTo="/faculty/dashboard"
+          icon={<BellIcon className="h-8 w-8" />}
+          actions={
+            <Button
+              variant="primary"
+              icon={<PlusIcon className="h-5 w-5" />}
               onClick={() => {
                 resetForm();
                 setShowForm(!showForm);
               }}
-              className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors"
             >
-              <PlusIcon className="h-5 w-5" />
               Post Notification
-            </button>
-          </div>
+            </Button>
+          }
+        />
 
           {showForm && (
-            <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+            <Card className="mb-8">
               <h2 className="text-xl font-bold mb-4">Post New Notification</h2>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
@@ -302,25 +303,25 @@ export default function FacultyNotifications() {
                 </div>
 
                 <div className="flex justify-end gap-3">
-                  <button
+                  <Button
+                    variant="secondary"
                     type="button"
                     onClick={() => {
                       setShowForm(false);
                       resetForm();
                     }}
-                    className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="primary"
                     type="submit"
-                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                   >
                     Post Notification
-                  </button>
+                  </Button>
                 </div>
               </form>
-            </div>
+            </Card>
           )}
 
           {isLoading ? (
@@ -329,11 +330,11 @@ export default function FacultyNotifications() {
               <p className="mt-4 text-gray-600 text-lg">Loading notifications...</p>
             </div>
           ) : notifications.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-lg p-12 text-center">
+            <Card className="p-12 text-center">
               <BellIcon className="h-20 w-20 text-gray-300 mx-auto mb-4" />
               <h3 className="text-xl font-bold text-gray-700 mb-2">No notifications posted yet</h3>
               <p className="text-gray-500">Click "Post Notification" to create your first announcement</p>
-            </div>
+            </Card>
           ) : (
             <div>
               <div className="mb-4 text-sm text-gray-600">
@@ -343,9 +344,9 @@ export default function FacultyNotifications() {
                 {notifications.map((notification) => {
                   const colors = getPriorityColor(notification.priority);
                   return (
-                    <div
+                    <Card
                       key={notification.id}
-                      className={`${colors.bg} border-l-4 ${colors.border} rounded-lg shadow-md p-6 transition-all hover:shadow-lg`}
+                      className={`${colors.bg} border-l-4 ${colors.border} transition-all hover:shadow-lg`}
                     >
                       <div className="flex items-start gap-4">
                         <div className={`${colors.icon} mt-1`}>
@@ -398,14 +399,13 @@ export default function FacultyNotifications() {
                           </div>
                         </div>
                       </div>
-                    </div>
+                    </Card>
                   );
                 })}
               </div>
             </div>
           )}
-        </main>
-      </div>
+      </DashboardLayout>
     </ProtectedRoute>
   );
 }

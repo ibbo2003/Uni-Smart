@@ -2,6 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { DashboardLayout } from '@/components/modern/DashboardLayout';
+import { PageHeader } from '@/components/modern/PageHeader';
+import { Card } from '@/components/modern/Card';
+import { Button } from '@/components/modern/Button';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   MagnifyingGlassIcon,
@@ -175,32 +179,33 @@ export default function StudentResultsPage() {
 
   return (
     <ProtectedRoute allowedRoles={['ADMIN']}>
-      <div className="min-h-screen bg-gray-50">
-        <div className="container mx-auto p-8">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold text-gray-800 mb-2">Student Results</h1>
-            <p className="text-gray-600">View and analyze student examination results</p>
-          </div>
+      <DashboardLayout>
+        <PageHeader
+          title="Student Results"
+          description="View and analyze student examination results"
+          showBack={true}
+          backTo="/admin"
+          icon={<AcademicCapIcon className="h-8 w-8" />}
+        />
 
-          {!selectedStudent ? (
-            <>
-              {/* Search Bar */}
-              <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                <div className="relative">
-                  <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-3 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search by USN or student name..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
+        {!selectedStudent ? (
+          <>
+            {/* Search Bar */}
+            <Card className="mb-6">
+              <div className="relative">
+                <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-3 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search by USN or student name..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
               </div>
+            </Card>
 
-              {/* Students List */}
-              <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            {/* Students List */}
+            <Card noPadding>
                 {loading ? (
                   <div className="text-center py-12">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
@@ -280,12 +285,12 @@ export default function StudentResultsPage() {
                     </table>
                   </div>
                 )}
-              </div>
+              </Card>
             </>
           ) : (
             <>
               {/* Student Detail View */}
-              <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+              <Card className="mb-6">
                 <div className="flex justify-between items-start">
                   <div className="flex items-start gap-4">
                     <div className="h-16 w-16 rounded-full bg-blue-500 flex items-center justify-center text-white text-2xl font-semibold">
@@ -311,10 +316,10 @@ export default function StudentResultsPage() {
                     <XMarkIcon className="h-6 w-6" />
                   </button>
                 </div>
-              </div>
+              </Card>
 
               {/* Semester Filter */}
-              <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+              <Card className="mb-6">
                 <div className="flex items-center gap-4">
                   <FunnelIcon className="h-5 w-5 text-gray-500" />
                   <span className="text-sm font-medium text-gray-700">Filter by Semester:</span>
@@ -329,23 +334,23 @@ export default function StudentResultsPage() {
                     ))}
                   </select>
                 </div>
-              </div>
+              </Card>
 
               {/* Results by Semester */}
               {resultsLoading ? (
-                <div className="bg-white rounded-lg shadow-md p-12 text-center">
+                <Card className="p-12 text-center">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="mt-4 text-gray-600">Loading results...</p>
-                </div>
+                  <p className="mt-4 text-gray-600 text-lg">Loading results...</p>
+                </Card>
               ) : getFilteredResults().length === 0 ? (
-                <div className="bg-white rounded-lg shadow-md p-12 text-center">
-                  <ChartBarIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">No results found for this student</p>
-                </div>
+                <Card className="p-12 text-center">
+                  <ChartBarIcon className="h-20 w-20 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600 text-lg">No results found for this student</p>
+                </Card>
               ) : (
                 <div className="space-y-6">
                   {getFilteredResults().map((semesterResult) => (
-                    <div key={semesterResult.semester} className="bg-white rounded-lg shadow-md overflow-hidden">
+                    <Card key={semesterResult.semester} noPadding>
                       {/* Semester Header */}
                       <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4">
                         <div className="flex justify-between items-center text-white">
@@ -405,24 +410,23 @@ export default function StudentResultsPage() {
                           </table>
                         </div>
                       </div>
-                    </div>
+                    </Card>
                   ))}
                 </div>
               )}
 
               {/* Back Button */}
               <div className="mt-6">
-                <button
+                <Button
+                  variant="secondary"
                   onClick={closeStudentView}
-                  className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
                 >
                   ← Back to Students List
-                </button>
+                </Button>
               </div>
             </>
           )}
-        </div>
-      </div>
+      </DashboardLayout>
     </ProtectedRoute>
   );
 }

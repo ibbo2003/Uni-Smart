@@ -2,7 +2,11 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import StudentNav from '../components/StudentNav';
+import { DashboardLayout } from '@/components/modern/DashboardLayout';
+import { PageHeader } from '@/components/modern/PageHeader';
+import { Card } from '@/components/modern/Card';
+import { StatCard } from '@/components/modern/StatCard';
+import { Button } from '@/components/modern/Button';
 import { ClipboardDocumentCheckIcon, CalendarDaysIcon, MapPinIcon, FunnelIcon, UserGroupIcon } from '@heroicons/react/24/outline';
 
 interface Seat {
@@ -58,17 +62,14 @@ export default function StudentExamSeating() {
   if (isLoading) {
     return (
       <ProtectedRoute allowedRoles={['STUDENT']}>
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-          <StudentNav />
-          <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="flex items-center justify-center py-20">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-4 text-gray-600">Loading exam seating...</p>
-              </div>
+        <DashboardLayout>
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600 text-lg">Loading exam seating...</p>
             </div>
-          </main>
-        </div>
+          </div>
+        </DashboardLayout>
       </ProtectedRoute>
     );
   }
@@ -76,20 +77,21 @@ export default function StudentExamSeating() {
   if (examSeats.length === 0) {
     return (
       <ProtectedRoute allowedRoles={['STUDENT']}>
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-          <StudentNav />
-          <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="mb-8">
-              <h1 className="text-4xl font-bold text-gray-800 mb-2">Exam Seating</h1>
-              <p className="text-gray-600">Your exam hall and seat allocations</p>
-            </div>
-            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-8 text-center">
-              <ClipboardDocumentCheckIcon className="h-16 w-16 text-yellow-600 mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-gray-800 mb-2">No Exam Seating Available</h2>
-              <p className="text-gray-700">Exam seating arrangements haven't been generated yet.</p>
-            </div>
-          </main>
-        </div>
+        <DashboardLayout>
+          <PageHeader
+            title="Exam Seating"
+            description="Your exam hall and seat allocations"
+            showBack={true}
+            backTo="/student/dashboard"
+            icon={<ClipboardDocumentCheckIcon className="h-8 w-8" />}
+          />
+
+          <Card className="p-12 text-center">
+            <ClipboardDocumentCheckIcon className="h-20 w-20 text-yellow-600 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">No Exam Seating Available</h2>
+            <p className="text-gray-700">Exam seating arrangements haven't been generated yet.</p>
+          </Card>
+        </DashboardLayout>
       </ProtectedRoute>
     );
   }
@@ -99,111 +101,97 @@ export default function StudentExamSeating() {
 
   return (
     <ProtectedRoute allowedRoles={['STUDENT']}>
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        <StudentNav />
+      <DashboardLayout>
+        <PageHeader
+          title="Exam Seating"
+          description="Your exam hall and seat allocations"
+          showBack={true}
+          backTo="/student/dashboard"
+          icon={<ClipboardDocumentCheckIcon className="h-8 w-8" />}
+        />
 
-        <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold text-gray-800 mb-2">Exam Seating</h1>
-            <p className="text-gray-600">Your exam hall and seat allocations</p>
-          </div>
-
-          {/* Info Banner */}
-          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6 rounded">
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                <ClipboardDocumentCheckIcon className="h-6 w-6 text-blue-600" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-blue-700">
-                  <span className="font-semibold">Important:</span> Please arrive at the exam hall at least 15 minutes before the scheduled time. Carry your ID card and hall ticket.
-                </p>
-              </div>
+        {/* Info Banner */}
+        <Card className="mb-6 bg-blue-50 border-l-4 border-l-blue-500">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <ClipboardDocumentCheckIcon className="h-6 w-6 text-blue-600" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-blue-700">
+                <span className="font-semibold">Important:</span> Please arrive at the exam hall at least 15 minutes before the scheduled time. Carry your ID card and hall ticket.
+              </p>
             </div>
           </div>
+        </Card>
 
-          {/* Statistics and Filter */}
-          <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-              {/* Statistics */}
-              <div className="flex flex-wrap gap-4">
-                <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-lg">
-                  <ClipboardDocumentCheckIcon className="h-5 w-5 text-gray-600" />
-                  <div>
-                    <p className="text-xs text-gray-500">Total Exams</p>
-                    <p className="text-lg font-bold text-gray-800">{examSeats.length}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 px-4 py-2 bg-green-50 rounded-lg">
-                  <UserGroupIcon className="h-5 w-5 text-green-600" />
-                  <div>
-                    <p className="text-xs text-gray-500">Internal Exams</p>
-                    <p className="text-lg font-bold text-green-800">{internalCount}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 px-4 py-2 bg-purple-50 rounded-lg">
-                  <MapPinIcon className="h-5 w-5 text-purple-600" />
-                  <div>
-                    <p className="text-xs text-gray-500">External Exams</p>
-                    <p className="text-lg font-bold text-purple-800">{externalCount}</p>
-                  </div>
-                </div>
-              </div>
+        {/* Statistics */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <StatCard
+            title="Total Exams"
+            value={examSeats.length}
+            icon={<ClipboardDocumentCheckIcon className="h-6 w-6 text-white" />}
+            gradient="from-blue-500 to-blue-600"
+          />
+          <StatCard
+            title="Internal Exams"
+            value={internalCount}
+            icon={<UserGroupIcon className="h-6 w-6 text-white" />}
+            gradient="from-green-500 to-green-600"
+          />
+          <StatCard
+            title="External Exams"
+            value={externalCount}
+            icon={<MapPinIcon className="h-6 w-6 text-white" />}
+            gradient="from-purple-500 to-purple-600"
+          />
+        </div>
 
-              {/* Filter */}
-              <div className="flex items-center gap-3">
-                <FunnelIcon className="h-5 w-5 text-gray-600" />
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setExamTypeFilter('all')}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                      examTypeFilter === 'all'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    All ({examSeats.length})
-                  </button>
-                  <button
-                    onClick={() => setExamTypeFilter('internal')}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                      examTypeFilter === 'internal'
-                        ? 'bg-green-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    Internal ({internalCount})
-                  </button>
-                  <button
-                    onClick={() => setExamTypeFilter('external')}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                      examTypeFilter === 'external'
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    External ({externalCount})
-                  </button>
-                </div>
-              </div>
+        {/* Filter */}
+        <Card className="mb-6">
+          <div className="flex items-center gap-3">
+            <FunnelIcon className="h-5 w-5 text-gray-600" />
+            <span className="font-medium text-gray-700">Filter by type:</span>
+            <div className="flex gap-2">
+              <Button
+                variant={examTypeFilter === 'all' ? 'primary' : 'secondary'}
+                onClick={() => setExamTypeFilter('all')}
+                size="sm"
+              >
+                All ({examSeats.length})
+              </Button>
+              <Button
+                variant={examTypeFilter === 'internal' ? 'success' : 'secondary'}
+                onClick={() => setExamTypeFilter('internal')}
+                size="sm"
+              >
+                Internal ({internalCount})
+              </Button>
+              <Button
+                variant={examTypeFilter === 'external' ? 'primary' : 'secondary'}
+                onClick={() => setExamTypeFilter('external')}
+                size="sm"
+                className={examTypeFilter === 'external' ? 'bg-gradient-to-r from-purple-600 to-purple-700' : ''}
+              >
+                External ({externalCount})
+              </Button>
             </div>
           </div>
+        </Card>
 
-          {/* Exam Cards */}
-          <div className="space-y-6">
-            {filteredSeats.length === 0 ? (
-              <div className="bg-white rounded-xl shadow-md p-8 text-center">
-                <p className="text-gray-600">No {examTypeFilter} exams found.</p>
-              </div>
-            ) : (
-              filteredSeats.map((seat, idx) => (
-                <div
-                  key={idx}
-                  className={`bg-white rounded-xl shadow-lg overflow-hidden border-l-4 hover:shadow-xl transition-shadow ${
-                    seat.exam_type === 'internal' ? 'border-green-500' : 'border-purple-500'
-                  }`}
-                >
-                  <div className="p-6">
+        {/* Exam Cards */}
+        <div className="space-y-6">
+          {filteredSeats.length === 0 ? (
+            <Card className="p-8 text-center">
+              <p className="text-gray-600">No {examTypeFilter} exams found.</p>
+            </Card>
+          ) : (
+            filteredSeats.map((seat, idx) => (
+              <Card
+                key={idx}
+                className={`border-l-4 hover:shadow-xl transition-shadow ${
+                  seat.exam_type === 'internal' ? 'border-l-green-500' : 'border-l-purple-500'
+                }`}
+              >
                     <div className="flex items-start justify-between mb-4">
                       <div>
                         <h3 className="text-2xl font-bold text-gray-800 mb-1">{seat.subject_code}</h3>
@@ -303,14 +291,13 @@ export default function StudentExamSeating() {
                         )}
                       </div>
                     </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+                  </Card>
+                ))
+              )}
+            </div>
 
-          {/* Important Instructions */}
-          <div className="mt-8 bg-white rounded-xl shadow-lg p-6">
+        {/* Important Instructions */}
+        <Card className="mt-8">
             <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
               <ClipboardDocumentCheckIcon className="h-6 w-6 text-indigo-600" />
               Exam Guidelines
@@ -341,9 +328,8 @@ export default function StudentExamSeating() {
                 <span className="font-semibold text-green-700">For Internal Exams: You will share the seat with another student from a different subject</span>
               </li>
             </ul>
-          </div>
-        </main>
-      </div>
+          </Card>
+      </DashboardLayout>
     </ProtectedRoute>
   );
 }

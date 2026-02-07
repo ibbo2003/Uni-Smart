@@ -1,7 +1,7 @@
 "use client";
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   HomeIcon,
   CalendarIcon,
@@ -9,8 +9,8 @@ import {
   ClipboardDocumentCheckIcon,
   BellIcon,
   ArrowRightOnRectangleIcon,
-  UserCircleIcon
-} from '@heroicons/react/24/outline';
+  UserCircleIcon,
+} from "@heroicons/react/24/outline";
 
 export default function StudentNav() {
   const pathname = usePathname();
@@ -19,15 +19,19 @@ export default function StudentNav() {
 
   const handleLogout = () => {
     logout();
-    router.push('/auth');
+    router.push("/auth");
   };
 
   const navItems = [
-    { name: 'Dashboard', path: '/student/dashboard', icon: HomeIcon },
-    { name: 'Timetable', path: '/student/timetable', icon: CalendarIcon },
-    { name: 'Results', path: '/student/results', icon: ChartBarIcon },
-    { name: 'Exam Seating', path: '/student/exams', icon: ClipboardDocumentCheckIcon },
-    { name: 'Notifications', path: '/student/notifications', icon: BellIcon },
+    { name: "Dashboard", path: "/student/dashboard", icon: HomeIcon },
+    { name: "Timetable", path: "/student/timetable", icon: CalendarIcon },
+    { name: "Results", path: "/student/results", icon: ChartBarIcon },
+    {
+      name: "Exam Seating",
+      path: "/student/exams",
+      icon: ClipboardDocumentCheckIcon,
+    },
+    { name: "Notifications", path: "/student/notifications", icon: BellIcon },
   ];
 
   return (
@@ -35,8 +39,11 @@ export default function StudentNav() {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/student/dashboard" className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
-            <span>Uni-Smart</span>
+          <Link
+            href="/student/dashboard"
+            className="text-2xl font-bold text-indigo-600 flex items-center gap-2"
+          >
+            <span>UniSmart</span>
           </Link>
 
           {/* Navigation Links */}
@@ -50,8 +57,8 @@ export default function StudentNav() {
                   href={item.path}
                   className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                     isActive
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-gray-600 hover:bg-gray-100'
+                      ? "bg-indigo-600 text-white"
+                      : "text-gray-600 hover:bg-gray-100"
                   }`}
                 >
                   <Icon className="h-5 w-5" />
@@ -65,7 +72,9 @@ export default function StudentNav() {
           <div className="flex items-center gap-4">
             <div className="hidden sm:flex items-center gap-2 text-gray-700">
               <UserCircleIcon className="h-6 w-6" />
-              <span className="text-sm font-medium">{user?.name || user?.email}</span>
+              <span className="text-sm font-medium">
+                {user?.first_name}
+              </span>
             </div>
             <button
               onClick={handleLogout}
@@ -89,8 +98,8 @@ export default function StudentNav() {
                   href={item.path}
                   className={`flex items-center gap-3 px-4 py-3 rounded-md text-sm font-medium transition-colors ${
                     isActive
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-gray-600 hover:bg-gray-100'
+                      ? "bg-indigo-600 text-white"
+                      : "text-gray-600 hover:bg-gray-100"
                   }`}
                 >
                   <Icon className="h-5 w-5" />

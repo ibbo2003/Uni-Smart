@@ -1,6 +1,6 @@
 @echo off
 echo ========================================
-echo   Uni-Smart v5.1 - First Time Setup
+echo   UniSmart v5.1 - First Time Setup
 echo ========================================
 echo.
 

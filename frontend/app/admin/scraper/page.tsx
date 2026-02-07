@@ -3,6 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { DashboardLayout } from '@/components/modern/DashboardLayout';
+import { PageHeader } from '@/components/modern/PageHeader';
+import { Card, StatCard } from '@/components/modern/Card';
+import { Button } from '@/components/modern/Button';
+import { showToast } from '@/lib/toast';
 import {
   MagnifyingGlassIcon,
   ArrowPathIcon,
@@ -199,12 +205,12 @@ export default function ScraperPage() {
 
   const handleSingleScrape = async () => {
     if (!singleUSN.trim()) {
-      alert('Please enter a USN');
+      showToast.error('Please enter a USN');
       return;
     }
 
     if (!vtuURL) {
-      alert(`No VTU URL configured for Semester ${selectedSemester}, Academic Year ${selectedAcademicYear}. Please configure it in VTU Settings.`);
+      showToast.error(`No VTU URL configured for Semester ${selectedSemester}, Academic Year ${selectedAcademicYear}. Please configure it in VTU Settings.`);
       return;
     }
 
@@ -259,12 +265,12 @@ export default function ScraperPage() {
       .filter(usn => usn.length > 0);
 
     if (usnList.length === 0) {
-      alert('Please enter at least one USN');
+      showToast.error('Please enter at least one USN');
       return;
     }
 
     if (!vtuURL) {
-      alert(`No VTU URL configured for Semester ${selectedSemester}, Academic Year ${selectedAcademicYear}. Please configure it in VTU Settings.`);
+      showToast.error(`No VTU URL configured for Semester ${selectedSemester}, Academic Year ${selectedAcademicYear}. Please configure it in VTU Settings.`);
       return;
     }
 
@@ -294,11 +300,12 @@ export default function ScraperPage() {
         setBatchProgress(data.results || []);
         fetchLogs();
         calculateStats();
+        showToast.success(`Batch scraping completed! ${data.successful} successful, ${data.failed} failed`);
       } else {
-        alert(data.error || 'Batch scraping failed');
+        showToast.error(data.error || 'Batch scraping failed');
       }
     } catch (error: any) {
-      alert(error.message || 'Network error');
+      showToast.error(error.message || 'Network error');
     } finally {
       setBatchLoading(false);
     }
@@ -317,59 +324,46 @@ export default function ScraperPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">VTU Result Scraper</h1>
-          <p className="text-gray-600">Automated result extraction with AI-powered CAPTCHA solving</p>
-        </div>
+    <ProtectedRoute allowedRoles={['ADMIN']}>
+      <DashboardLayout>
+        <PageHeader
+          title="VTU Result Scraper"
+          description="Automated result extraction with smart CAPTCHA solving"
+          showBack={true}
+          backTo="/admin"
+          icon={<SparklesIcon className="h-8 w-8" />}
+        />
 
         {/* Quick Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Scrapes Today</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">{stats.totalToday}</p>
-              </div>
-              <ClockIcon className="w-12 h-12 text-blue-500 opacity-80" />
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-green-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Success Rate</p>
-                <p className="text-3xl font-bold text-green-600 mt-1">{stats.successRate.toFixed(1)}%</p>
-              </div>
-              <CheckCircleIcon className="w-12 h-12 text-green-500 opacity-80" />
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-purple-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Avg Execution Time</p>
-                <p className="text-3xl font-bold text-purple-600 mt-1">{stats.avgTime.toFixed(1)}s</p>
-              </div>
-              <SparklesIcon className="w-12 h-12 text-purple-500 opacity-80" />
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-red-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Failed Scrapes</p>
-                <p className="text-3xl font-bold text-red-600 mt-1">{stats.failedCount}</p>
-              </div>
-              <XCircleIcon className="w-12 h-12 text-red-500 opacity-80" />
-            </div>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <StatCard
+            title="Total Scrapes Today"
+            value={stats.totalToday}
+            icon={<ClockIcon className="h-6 w-6 text-white" />}
+            gradient="from-blue-500 to-blue-600"
+          />
+          <StatCard
+            title="Success Rate"
+            value={`${stats.successRate.toFixed(1)}%`}
+            icon={<CheckCircleIcon className="h-6 w-6 text-white" />}
+            gradient="from-green-500 to-green-600"
+          />
+          <StatCard
+            title="Avg Execution Time"
+            value={`${stats.avgTime.toFixed(1)}s`}
+            icon={<SparklesIcon className="h-6 w-6 text-white" />}
+            gradient="from-purple-500 to-purple-600"
+          />
+          <StatCard
+            title="Failed Scrapes"
+            value={stats.failedCount}
+            icon={<XCircleIcon className="h-6 w-6 text-white" />}
+            gradient="from-red-500 to-red-600"
+          />
         </div>
 
         {/* Scraper Configuration */}
-        <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl shadow-lg p-6 mb-8 text-white">
+        <Card className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl shadow-lg p-6 mb-8 text-white">
           <div className="flex items-start gap-4 mb-4">
             <ExclamationTriangleIcon className="w-8 h-8 flex-shrink-0 mt-1" />
             <div>
@@ -442,12 +436,12 @@ export default function ScraperPage() {
               </p>
             </div>
           )}
-        </div>
+        </Card>
 
         {/* Scrape Forms */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* Single USN Scrape */}
-          <div className="bg-white rounded-xl shadow-lg p-6">
+          <Card>
             <div className="flex items-center gap-3 mb-4">
               <MagnifyingGlassIcon className="w-6 h-6 text-blue-600" />
               <h2 className="text-2xl font-bold text-gray-900">Single USN Scrape</h2>
@@ -517,10 +511,10 @@ export default function ScraperPage() {
                 </div>
               )}
             </div>
-          </div>
+          </Card>
 
           {/* Batch Scrape */}
-          <div className="bg-white rounded-xl shadow-lg p-6">
+          <Card>
             <div className="flex items-center gap-3 mb-4">
               <ChartBarIcon className="w-6 h-6 text-purple-600" />
               <h2 className="text-2xl font-bold text-gray-900">Batch Scrape</h2>
@@ -610,11 +604,11 @@ export default function ScraperPage() {
                 </div>
               )}
             </div>
-          </div>
+          </Card>
         </div>
 
         {/* Scrape Logs */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
+        <Card>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-gray-900">Scrape History</h2>
             <button
@@ -723,8 +717,8 @@ export default function ScraperPage() {
               </tbody>
             </table>
           </div>
-        </div>
-      </div>
-    </div>
+        </Card>
+      </DashboardLayout>
+    </ProtectedRoute>
   );
 }

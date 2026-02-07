@@ -1,4 +1,4 @@
-# 🎓 Uni-Smart - Academic Management System
+# 🎓 UniSmart - Academic Management System
 
 > AI-Powered Timetable Generation | VTU Result Analysis | Intelligent Exam Seating | Enhanced VTU 2024 Compliance
 
@@ -28,7 +28,7 @@
 
 ## 🌟 Overview
 
-Uni-Smart is a comprehensive academic management system designed specifically for VTU (Visvesvaraya Technological University) institutions. Currently focused on the **CSE Department** with plans for multi-department expansion.
+UniSmart is a comprehensive academic management system designed specifically for VTU (Visvesvaraya Technological University) institutions. Currently focused on the **CSE Department** with plans for multi-department expansion.
 
 ### Three Core Modules:
 
@@ -95,7 +95,7 @@ Built with a modern **microservices architecture** where each module operates in
 ## 🏗️ Architecture
 
 ```
-Uni-Smart/
+UniSmart/
 ├── frontend/                    # Next.js 15 (React + TypeScript)
 │   ├── app/                    # Pages (App Router)
 │   │   ├── timetable/
@@ -149,12 +149,14 @@ Gateway (Express :8080)
 ### Installation
 
 1. **Clone the repository:**
+
 ```bash
-git clone https://github.com/yourusername/uni-smart.git
-cd uni-smart
+git clone https://github.com/yourusername/UniSmart.git
+cd UniSmart
 ```
 
 2. **Install Node.js dependencies:**
+
 ```bash
 npm install
 ```
@@ -188,6 +190,7 @@ cd ..
 4. **Configure Database:**
 
 Create `.env` file in root:
+
 ```env
 DB_HOST=localhost
 DB_USER=root
@@ -197,11 +200,13 @@ DB_PORT=3306
 ```
 
 Create the database:
+
 ```sql
 CREATE DATABASE unismart_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
 5. **Run Django Migrations:**
+
 ```bash
 cd "result analysis"
 venv\Scripts\activate
@@ -211,11 +216,13 @@ cd ..
 ```
 
 6. **Start All Services:**
+
 ```bash
 npm run dev
 ```
 
 This starts:
+
 - Frontend: http://localhost:3000
 - Gateway: http://localhost:8080
 - Timetable Service: http://localhost:5000
@@ -223,6 +230,7 @@ This starts:
 - Result Analysis API: http://localhost:8001
 
 7. **Access the Application:**
+
 - **Frontend:** http://localhost:3000
 - **Django Admin:** http://localhost:8001/admin/
   - Username: admin
@@ -233,7 +241,7 @@ This starts:
 ## 📁 Project Structure
 
 ```
-Uni-Smart/
+UniSmart/
 ├── docs/                           # 📚 Documentation
 │   ├── RBAC_SPECIFICATION.md      # Role-based access control guide
 │   ├── RESULT_ANALYSIS.md         # Result module detailed docs
@@ -333,6 +341,7 @@ Database Tables (MySQL):
 ### 1. Timetable Generation
 
 **Generate a timetable:**
+
 ```bash
 POST http://localhost:8080/api/timetable/generate
 Content-Type: application/json
@@ -356,6 +365,7 @@ Content-Type: application/json
 ```
 
 **Export timetable:**
+
 ```bash
 POST http://localhost:8080/api/timetable/{sectionId}/export/pdf
 POST http://localhost:8080/api/timetable/{sectionId}/export/word
@@ -367,6 +377,7 @@ POST http://localhost:8080/api/timetable/{sectionId}/export/excel
 ### 2. Exam Seating
 
 **Create exam room:**
+
 ```bash
 POST http://localhost:5001/rooms
 Content-Type: application/json
@@ -379,6 +390,7 @@ Content-Type: application/json
 ```
 
 **Schedule exam:**
+
 ```bash
 POST http://localhost:5001/exams
 Content-Type: application/json
@@ -391,6 +403,7 @@ Content-Type: application/json
 ```
 
 **Register students:**
+
 ```bash
 POST http://localhost:5001/registrations/batch
 Content-Type: application/json
@@ -402,6 +415,7 @@ Content-Type: application/json
 ```
 
 **Generate seating:**
+
 ```bash
 POST http://localhost:5001/generate_seating
 Content-Type: application/json
@@ -417,6 +431,7 @@ Content-Type: application/json
 ### 3. Result Analysis API
 
 **Authentication:**
+
 ```bash
 POST http://localhost:8001/api/auth/login/
 Content-Type: application/json
@@ -439,18 +454,21 @@ Response:
 ```
 
 **Get student results:**
+
 ```bash
 GET http://localhost:8001/api/results/student/1CR21CS001/
 Authorization: Bearer <jwt_token>
 ```
 
 **Get subject analytics:**
+
 ```bash
 GET http://localhost:8001/api/analytics/subject/?subject_id=<uuid>
 Authorization: Bearer <jwt_token>
 ```
 
 **Scrape VTU results (Admin only):**
+
 ```bash
 POST http://localhost:8001/api/scraper/scrape-batch/
 Authorization: Bearer <jwt_token>
@@ -469,11 +487,12 @@ Content-Type: application/json
 
 ## 🔐 Role-Based Access Control (RBAC)
 
-Uni-Smart implements comprehensive role-based access control across all modules.
+UniSmart implements comprehensive role-based access control across all modules.
 
 ### Three User Roles:
 
 #### 1. **ADMIN** (Full Control)
+
 - Manage all users, departments, subjects
 - Generate and edit timetables for any class
 - Schedule exams and generate seating arrangements
@@ -484,18 +503,21 @@ Uni-Smart implements comprehensive role-based access control across all modules.
 #### 2. **FACULTY** (Department-Level Access)
 
 **As Class Advisor:**
+
 - Generate timetable for advised class only
 - Register students for exams (own class)
 - View all results of advised class students
 - Analyze advised class performance
 
 **As Subject Teacher:**
+
 - View teaching schedule for assigned subjects
 - View results for subjects taught
 - Analyze subject-specific performance
 - View exams for subjects handled
 
 **Cannot:**
+
 - Edit/modify timetables (admin-only)
 - Generate exam seating (admin-only)
 - Scrape VTU results (admin-only)
@@ -503,6 +525,7 @@ Uni-Smart implements comprehensive role-based access control across all modules.
 - Access data outside their class/subjects
 
 #### 3. **STUDENT** (Personal Access)
+
 - View own timetable
 - View own results and CGPA
 - View own exam seat allocation
@@ -510,6 +533,7 @@ Uni-Smart implements comprehensive role-based access control across all modules.
 - Update limited profile fields
 
 **Cannot:**
+
 - View other students' data
 - Access any management features
 - Register for exams (faculty/admin does it)
@@ -517,11 +541,13 @@ Uni-Smart implements comprehensive role-based access control across all modules.
 ### Implementation:
 
 **Backend (Django):**
+
 - Custom permission classes per role
 - Queryset filtering based on user role
 - Object-level permissions
 
 **Frontend (Next.js):**
+
 - Route guards with role checking
 - Component-level rendering based on role
 - Context API for auth state management
@@ -587,12 +613,14 @@ The `results_` prefix prevents conflicts with exam seating's simple `students` t
 **Base URL:** `http://localhost:8080/api`
 
 #### Timetable Routes:
+
 - `POST /timetable/generate` - Generate new timetable
 - `GET /timetable/available` - List all timetables
 - `GET /timetable/{sectionId}` - Get specific timetable
 - `POST /timetable/{sectionId}/export/{format}` - Export (pdf/word/excel)
 
 #### Exam Seating Routes:
+
 - `POST /exams/generate-seating` - Generate seating plan
 
 ### Result Analysis Endpoints (Port 8001)
@@ -600,38 +628,45 @@ The `results_` prefix prevents conflicts with exam seating's simple `students` t
 **Base URL:** `http://localhost:8001/api`
 
 **Authentication Required:** All endpoints require JWT token in header:
+
 ```
 Authorization: Bearer <access_token>
 ```
 
 #### Auth:
+
 - `POST /auth/login/` - Get JWT tokens
 - `POST /auth/refresh/` - Refresh access token
 - `POST /auth/verify/` - Verify token
 
 #### Users:
+
 - `GET /users/` - List users (Admin only)
 - `GET /users/me/` - Get current user profile
 - `POST /users/{id}/change_password/` - Change password
 
 #### Students:
+
 - `GET /students/` - List students (filtered by role)
 - `GET /students/{id}/` - Get student details
 - `GET /students/{id}/results/` - Get student results
 - `GET /students/{id}/cgpa/` - Calculate CGPA
 
 #### Results:
+
 - `GET /results/` - List results (filtered by role)
 - `GET /results/student/{usn}/` - Get results by USN
 - `POST /results/` - Upload results (Admin/Faculty)
 
 #### Analytics:
+
 - `GET /analytics/subject/?subject_id=<id>` - Subject analytics
 - `GET /analytics/class/?section_id=<id>` - Class analytics
 - `GET /analytics/department/` - Department overview
 - `GET /analytics/compare/` - Student comparison
 
 #### Scraper (Admin only):
+
 - `POST /scraper/scrape-single/` - Scrape one student
 - `POST /scraper/scrape-batch/` - Batch scrape
 - `GET /scraper/logs/` - View scrape logs
@@ -647,11 +682,13 @@ Authorization: Bearer <access_token>
 #### 1. Services not starting
 
 **Issue:** Port already in use
+
 ```bash
 Error: listen EADDRINUSE: address already in use :::8080
 ```
 
 **Solution:**
+
 ```bash
 # Find process using the port (Windows)
 netstat -ano | findstr :8080
@@ -668,9 +705,11 @@ GATEWAY_PORT=8081
 **Issue:** `Can't connect to MySQL server`
 
 **Solution:**
+
 - Ensure MySQL is running
 - Check `.env` credentials
 - Verify database exists:
+
 ```sql
 SHOW DATABASES LIKE 'unismart_db';
 ```
@@ -680,6 +719,7 @@ SHOW DATABASES LIKE 'unismart_db';
 **Issue:** Models showing "Unknown column" errors
 
 **Solution:** Tables already created with correct schema. If issues persist:
+
 ```bash
 cd "result analysis"
 venv\Scripts\activate
@@ -691,11 +731,13 @@ python manage.py migrate --fake
 **Issue:** Scraper returns errors
 
 **Causes:**
+
 - VTU portal down
 - Invalid credentials
 - Rate limiting
 
 **Solution:**
+
 - Check VTU portal manually
 - Verify credentials in system settings
 - Wait and retry (portal may be slow)
@@ -705,6 +747,7 @@ python manage.py migrate --fake
 **Issue:** 401 Unauthorized on API calls
 
 **Solution:**
+
 ```bash
 POST /api/auth/refresh/
 {
@@ -719,18 +762,21 @@ POST /api/auth/refresh/
 ### Running Individual Services
 
 **Frontend only:**
+
 ```bash
 cd frontend
 npm run dev
 ```
 
 **Gateway only:**
+
 ```bash
 cd gateway-express
 npm start
 ```
 
 **Timetable service:**
+
 ```bash
 cd service-timetable-python
 venv\Scripts\activate
@@ -738,6 +784,7 @@ python app.py
 ```
 
 **Exam Seating service:**
+
 ```bash
 cd service-examseating-python
 venv\Scripts\activate
@@ -745,6 +792,7 @@ python app.py
 ```
 
 **Result Analysis service:**
+
 ```bash
 cd "result analysis"
 venv\Scripts\activate
@@ -754,6 +802,7 @@ python manage.py runserver 8001
 ### Running Tests
 
 **Django tests:**
+
 ```bash
 cd "result analysis"
 venv\Scripts\activate
@@ -763,12 +812,14 @@ python manage.py test
 ### Database Migrations
 
 **Create new migration:**
+
 ```bash
 cd "result analysis"
 python manage.py makemigrations
 ```
 
 **Apply migrations:**
+
 ```bash
 python manage.py migrate
 ```
@@ -784,6 +835,7 @@ python cleanup_project.py
 ```
 
 This script removes:
+
 - Temporary setup scripts (already executed)
 - Test files (tables already created)
 - Redundant documentation (consolidated in README)
@@ -803,6 +855,7 @@ Contributions are welcome! Please follow these guidelines:
 5. Open a Pull Request
 
 ### Code Style:
+
 - Python: PEP 8
 - JavaScript/TypeScript: ESLint + Prettier
 - Commit messages: Conventional Commits
@@ -826,6 +879,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Support
 
 For issues and questions:
+
 - Create an issue on GitHub
 - Email: support@unismart.edu (if available)
 
@@ -836,6 +890,7 @@ For issues and questions:
 ### Current Version: 1.0 (CSE Department)
 
 ### Planned Features:
+
 - [ ] Multi-department support (All engineering departments)
 - [ ] Mobile app (React Native)
 - [ ] Email/SMS notifications

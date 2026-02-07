@@ -3,6 +3,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { DashboardLayout } from '@/components/modern/DashboardLayout';
+import { PageHeader } from '@/components/modern/PageHeader';
+import { Card } from '@/components/modern/Card';
+import { Button } from '@/components/modern/Button';
+import { showToast } from '@/lib/toast';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   ArrowLeftIcon,
@@ -188,7 +193,7 @@ export default function PerformanceAnalysisPage() {
 
       if (!token) {
         console.error('No authentication token found');
-        setError('Authentication required. Please log in again.');
+        showToast.error('Authentication required. Please log in again.');
         router.push('/auth');
         return;
       }
@@ -202,7 +207,7 @@ export default function PerformanceAnalysisPage() {
 
       if (response.status === 401) {
         console.error('Unauthorized: Token may be expired');
-        setError('Session expired. Please log in again.');
+        showToast.error('Session expired. Please log in again.');
         localStorage.removeItem('auth_token');
         router.push('/auth');
         return;
@@ -214,11 +219,11 @@ export default function PerformanceAnalysisPage() {
       } else {
         const errorData = await response.json().catch(() => ({}));
         console.error('Error response:', errorData);
-        setError(errorData.detail || 'Failed to fetch departments');
+        showToast.error(errorData.detail || 'Failed to fetch departments');
       }
     } catch (err) {
       console.error('Error fetching departments:', err);
-      setError('Network error. Please check your connection.');
+      showToast.error('Network error. Please check your connection.');
     }
   };
 
@@ -240,7 +245,7 @@ export default function PerformanceAnalysisPage() {
 
       if (response.status === 401) {
         console.error('Unauthorized: Token may be expired');
-        setError('Session expired. Please log in again.');
+        showToast.error('Session expired. Please log in again.');
         localStorage.removeItem('auth_token');
         router.push('/auth');
         return;
@@ -260,12 +265,13 @@ export default function PerformanceAnalysisPage() {
 
   const fetchPerformanceData = async () => {
     if (!selectedDepartment || !selectedBatch) {
-      setError('Please select department and batch');
+      showToast.error('Please select department and batch');
       return;
     }
 
     setLoading(true);
     setError('');
+    const toastId = showToast.loading('Analyzing performance data...');
 
     try {
       const token = localStorage.getItem('auth_token');
@@ -281,19 +287,24 @@ export default function PerformanceAnalysisPage() {
 
       const response = await fetch(url, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       });
 
       if (response.ok) {
         const data = await response.json();
         setPerformanceData(data);
+        showToast.dismiss(toastId);
+        showToast.success('Performance data loaded successfully!');
       } else {
         const errorData = await response.json();
-        setError(errorData.error || 'Failed to fetch performance data');
+        showToast.dismiss(toastId);
+        showToast.error(errorData.error || 'Failed to fetch performance data');
       }
     } catch (err) {
-      setError('Error fetching performance data');
+      showToast.dismiss(toastId);
+      showToast.error('Error fetching performance data');
       console.error(err);
     } finally {
       setLoading(false);
@@ -367,10 +378,11 @@ export default function PerformanceAnalysisPage() {
       pdf.save(filename);
 
       // Success notification
+      showToast.success('PDF exported successfully!');
       console.log('PDF generated successfully:', filename);
     } catch (error) {
       console.error('Error generating PDF:', error);
-      setError('Failed to generate PDF. The report is complex - please try using the Print option (Ctrl+P) and save as PDF instead.');
+      showToast.error('Failed to generate PDF. Please try using the Print option (Ctrl+P) instead.');
       // Show more detailed error in console
       if (error instanceof Error) {
         console.error('PDF Error details:', error.message, error.stack);
@@ -835,51 +847,38 @@ export default function PerformanceAnalysisPage() {
 
   return (
     <ProtectedRoute allowedRoles={['ADMIN']} redirectTo="/auth">
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-8">
+      <DashboardLayout>
         <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="mb-8 print:mb-4">
-            <div className="flex justify-between items-center mb-4">
-              <button
-                onClick={() => router.push('/admin')}
-                className="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors print:hidden"
-              >
-                <ArrowLeftIcon className="h-5 w-5" />
-                Back to Dashboard
-              </button>
-
-              <div className="flex gap-3 print:hidden">
-                <button
-                  onClick={handlePrint}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                >
-                  <PrinterIcon className="h-5 w-5" />
-                  Print
-                </button>
-                <button
-                  onClick={handleExportPDF}
-                  disabled={isExporting || !performanceData}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-                  title={!performanceData ? 'Please analyze performance data first' : 'Export report as PDF'}
-                >
-                  {isExporting ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                      Generating PDF...
-                    </>
-                  ) : (
-                    <>
-                      <DocumentArrowDownIcon className="h-5 w-5" />
-                      Export PDF
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <h1 className="text-4xl font-bold text-gray-800">Student Performance Analysis</h1>
-            <p className="text-gray-600 mt-2">Comprehensive analytics and insights for academic performance</p>
-          </div>
+          {/* Page Header */}
+          <PageHeader
+            title="Student Performance Analysis"
+            description="Comprehensive analytics and insights for academic performance"
+            showBack={true}
+            backTo="/admin"
+            icon={<ChartBarIcon className="h-8 w-8" />}
+            actions={
+              performanceData && (
+                <div className="flex gap-3 print:hidden">
+                  <Button
+                    variant="secondary"
+                    onClick={handlePrint}
+                    icon={<PrinterIcon className="h-5 w-5" />}
+                  >
+                    Print
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={handleExportPDF}
+                    loading={isExporting}
+                    disabled={!performanceData}
+                    icon={<DocumentArrowDownIcon className="h-5 w-5" />}
+                  >
+                    Export PDF
+                  </Button>
+                </div>
+              )
+            }
+          />
 
           {/* Filters */}
           <div className="bg-white rounded-xl shadow-lg p-6 mb-8 print:hidden">
@@ -1043,7 +1042,7 @@ export default function PerformanceAnalysisPage() {
             </div>
           )}
         </div>
-      </div>
+      </DashboardLayout>
 
       {/* Print Styles */}
       <style jsx global>{`

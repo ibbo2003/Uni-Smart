@@ -3,6 +3,11 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { CalendarIcon, PlusIcon, TrashIcon, ArrowLeftIcon, UserGroupIcon } from '@heroicons/react/24/outline';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { DashboardLayout } from '@/components/modern/DashboardLayout';
+import { PageHeader } from '@/components/modern/PageHeader';
+import { Card } from '@/components/modern/Card';
+import { Button } from '@/components/modern/Button';
+import { showToast } from '@/lib/toast';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Exam {
@@ -65,6 +70,11 @@ export default function ManageExamsPage() {
   const showMessage = (msg: string, type: 'success' | 'error') => {
     setMessage(msg);
     setMessageType(type);
+    if (type === 'success') {
+      showToast.success(msg);
+    } else {
+      showToast.error(msg);
+    }
     setTimeout(() => setMessage(''), 5000);
   };
 
@@ -96,7 +106,7 @@ export default function ManageExamsPage() {
   };
 
   const handleDelete = async (examId: number, subjectCode: string) => {
-    if (!confirm(`Are you sure you want to delete exam for ${subjectCode}? This will also delete all student registrations for this exam.`)) return;
+    if (!window.confirm(`Are you sure you want to delete exam for ${subjectCode}? This will also delete all student registrations for this exam.`)) return;
     if (!token) return;
 
     try {
@@ -155,27 +165,19 @@ export default function ManageExamsPage() {
 
   return (
     <ProtectedRoute allowedRoles={['ADMIN']}>
-      <main className="container mx-auto p-8">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-        <div>
-          <Link href="/exam-seating" className="flex items-center text-blue-600 hover:text-blue-800 mb-2">
-            <ArrowLeftIcon className="h-5 w-5 mr-2" />
-            Back to Exam Seating
-          </Link>
-          <h1 className="text-3xl font-bold text-gray-800 flex items-center">
-            <CalendarIcon className="h-8 w-8 mr-3 text-blue-600" />
-            Manage Exams
-          </h1>
-        </div>
-        <button
-          onClick={openModal}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <PlusIcon className="h-5 w-5 mr-2" />
-          Schedule New Exam
-        </button>
-      </div>
+      <DashboardLayout>
+        <PageHeader
+          title="Manage Exams"
+          description="Schedule exams, set dates and sessions, and manage student registrations"
+          showBack={true}
+          backTo="/exam-seating"
+          icon={<CalendarIcon className="h-8 w-8" />}
+          actions={
+            <Button variant="primary" icon={<PlusIcon className="h-5 w-5" />} onClick={openModal}>
+              Schedule New Exam
+            </Button>
+          }
+        />
 
       {/* Message Alert */}
       {message && (
@@ -186,23 +188,23 @@ export default function ManageExamsPage() {
 
       {/* Exams List */}
       {loading ? (
-        <div className="text-center py-12">Loading exams...</div>
+        <div className="text-center py-12">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">Loading exams...</p>
+        </div>
       ) : exams.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-md p-12 text-center">
+        <Card className="p-12 text-center">
           <CalendarIcon className="h-16 w-16 mx-auto text-gray-400 mb-4" />
           <h3 className="text-xl font-semibold text-gray-700 mb-2">No Exams Scheduled</h3>
           <p className="text-gray-500 mb-6">Get started by scheduling your first exam</p>
-          <button
-            onClick={openModal}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
+          <Button variant="primary" onClick={openModal}>
             Schedule First Exam
-          </button>
-        </div>
+          </Button>
+        </Card>
       ) : (
         <div className="space-y-8">
           {sortedDates.map(date => (
-            <div key={date} className="bg-white rounded-lg shadow-md overflow-hidden">
+            <Card key={date} className="overflow-hidden" noPadding>
               <div className="bg-blue-600 text-white px-6 py-4">
                 <h2 className="text-xl font-bold">{formatDate(date)}</h2>
               </div>
@@ -253,7 +255,7 @@ export default function ManageExamsPage() {
                     </div>
                   ))}
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}
@@ -313,25 +315,18 @@ export default function ManageExamsPage() {
               </div>
 
               <div className="flex space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
-                >
+                <Button variant="secondary" type="button" onClick={closeModal} className="flex-1">
                   Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                >
+                </Button>
+                <Button variant="primary" type="submit" className="flex-1">
                   Schedule Exam
-                </button>
+                </Button>
               </div>
             </form>
           </div>
         </div>
       )}
-      </main>
+      </DashboardLayout>
     </ProtectedRoute>
   );
 }

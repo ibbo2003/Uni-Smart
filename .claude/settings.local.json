@@ -25,7 +25,9 @@
       "Bash(timeout 3 bash -c 'while ! curl -s http://localhost:5001 > /dev/null 2>&1; do sleep 0.5; done; echo \"\"Service ready\"\"')",
       "Bash(./venv/Scripts/pip.exe install:*)",
       "Bash(node server.js)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npm install:*)",
+      "Bash(powershell -Command \"Stop-Process -Id 27960 -Force\")"
     ],
     "deny": [],
     "ask": []

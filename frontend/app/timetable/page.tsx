@@ -3,6 +3,12 @@ import { useState, useRef, useEffect, Fragment } from "react";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { RoleGuard } from "@/components/RoleGuard";
 import { useAuth } from "@/contexts/AuthContext";
+import { DashboardLayout } from "@/components/modern/DashboardLayout";
+import { PageHeader } from "@/components/modern/PageHeader";
+import { Card } from "@/components/modern/Card";
+import { Button } from "@/components/modern/Button";
+import { showToast } from "@/lib/toast";
+import { CalendarIcon, PlusIcon, TrashIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline';
 
 interface Faculty {
   id: string;
@@ -145,9 +151,10 @@ const TimetableGrid = ({ timetableData, faculties }: { timetableData: TimeSlot[]
   };
 
   return (
-    <div className="mt-12 bg-white p-8 rounded-lg shadow-md">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">Generated Timetable</h2>
+    <Card noPadding className="mt-8">
+      <div className="p-8">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">Generated Timetable</h2>
         <div className="flex gap-4 text-sm">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-green-50 border border-green-200 rounded"></div>
@@ -344,10 +351,12 @@ const TimetableGrid = ({ timetableData, faculties }: { timetableData: TimeSlot[]
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Statistics */}
-      <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="p-8 pt-0">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
           <div className="text-sm font-medium text-green-700">Theory Classes</div>
           <div className="text-2xl font-bold text-green-800">
@@ -390,8 +399,9 @@ const TimetableGrid = ({ timetableData, faculties }: { timetableData: TimeSlot[]
             {new Set(timetableData.map((s) => `${s.day}-${s.period}`)).size}
           </div>
         </div>
+        </div>
       </div>
-    </div>
+    </Card>
   );
 };
 
@@ -699,31 +709,26 @@ export default function TimetablePage() {
 
   return (
     <ProtectedRoute allowedRoles={['ADMIN']}>
-      <main className="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="max-w-7xl mx-auto">
-            {/* Header */}
-            <div className="text-center mb-10">
-              <h1 className="text-4xl font-bold text-gray-800 tracking-tight mb-2">
-                🎓 Uni-Smart Timetable Generator
-              </h1>
-              <p className="text-gray-600 mb-2">
-                AI-Powered Intelligent Timetable Generation System
-              </p>
-              <div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 rounded-full px-4 py-1">
-                <span className="text-green-700 font-semibold text-sm">✅ v5.1</span>
-                <span className="text-green-600 text-xs">Enhanced VTU 2024 Compliance</span>
-              </div>
-              {user && (
-                <div className="mt-3 text-sm text-gray-600">
-                  Logged in as: <span className="font-semibold text-indigo-600">{user.role}</span>
-                </div>
-              )}
-            </div>
+      <DashboardLayout>
+        <PageHeader
+          title="Timetable Generator"
+          description="Smart Intelligent Timetable Generation System - VTU  Compliance"
+          showBack={true}
+          backTo="/admin"
+          icon={<CalendarIcon className="h-8 w-8" />}
+        />
 
-          {/* Feature Highlights */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
-            <div className="bg-white border border-blue-200 rounded-lg p-4 shadow-sm">
+        {/* Version Badge */}
+        <div className="mb-6 flex justify-center">
+          <div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 rounded-full px-4 py-2">
+            <span className="text-green-700 font-semibold text-sm">✅ v5.1</span>
+            <span className="text-green-600 text-xs">Enhanced VTU 2024 Compliance</span>
+          </div>
+        </div>
+
+        {/* Feature Highlights */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <Card className="border-l-4 border-l-blue-500">
               <div className="flex items-start gap-3">
                 <div className="text-2xl">🔬</div>
                 <div>
@@ -733,36 +738,36 @@ export default function TimetablePage() {
                   </p>
                 </div>
               </div>
-            </div>
-            <div className="bg-white border border-green-200 rounded-lg p-4 shadow-sm">
-              <div className="flex items-start gap-3">
-                <div className="text-2xl">📅</div>
-                <div>
-                  <h3 className="font-semibold text-gray-800 text-sm">Saturday Awareness</h3>
-                  <p className="text-xs text-gray-600 mt-1">
-                    Minimizes Saturday labs (VTU 1st & 3rd Saturday holidays)
-                  </p>
-                </div>
+          </Card>
+          <Card className="border-l-4 border-l-green-500">
+            <div className="flex items-start gap-3">
+              <div className="text-2xl">📅</div>
+              <div>
+                <h3 className="font-semibold text-gray-800 text-sm">Saturday Awareness</h3>
+                <p className="text-xs text-gray-600 mt-1">
+                  Minimizes Saturday labs (VTU 1st & 3rd Saturday holidays)
+                </p>
               </div>
             </div>
-            <div className="bg-white border border-purple-200 rounded-lg p-4 shadow-sm">
-              <div className="flex items-start gap-3">
-                <div className="text-2xl">📚</div>
-                <div>
-                  <h3 className="font-semibold text-gray-800 text-sm">VTU 2024 Types</h3>
-                  <p className="text-xs text-gray-600 mt-1">
-                    Full support for PCC, PCCL, UHV, AEC, SEC, ESC, and more
-                  </p>
-                </div>
+          </Card>
+          <Card className="border-l-4 border-l-purple-500">
+            <div className="flex items-start gap-3">
+              <div className="text-2xl">📚</div>
+              <div>
+                <h3 className="font-semibold text-gray-800 text-sm">VTU 2024 Types</h3>
+                <p className="text-xs text-gray-600 mt-1">
+                  Full support for PCC, PCCL, UHV, AEC, SEC, ESC, and more
+                </p>
               </div>
             </div>
-          </div>
+          </Card>
+        </div>
 
-          {/* View Existing Timetable */}
-          <div className="mt-10 bg-white p-8 rounded-lg shadow-md border border-gray-200">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <span>📋</span> View Existing Timetable
-            </h2>
+        {/* View Existing Timetable */}
+        <Card className="mb-6">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <span>📋</span> View Existing Timetable
+          </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
               <div className="md:col-span-2">
                 <label htmlFor="select-timetable" className="block text-sm font-medium text-gray-700 mb-2">
@@ -784,52 +789,53 @@ export default function TimetablePage() {
                   ))}
                 </select>
               </div>
-              <div className="grid grid-cols-1 gap-3">
-                <button
-                  type="button"
-                  onClick={handleLoadTimetable}
-                  disabled={isLoadingView || availableTimetables.length === 0}
-                  className="w-full bg-blue-600 text-white px-6 py-3 rounded-md font-semibold hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
-                >
-                  {isLoadingView ? "Loading..." : "Load Timetable"}
-                </button>
+            <div className="grid grid-cols-1 gap-3">
+              <Button
+                variant="primary"
+                onClick={handleLoadTimetable}
+                disabled={isLoadingView || availableTimetables.length === 0}
+                loading={isLoadingView}
+                className="w-full"
+              >
+                {isLoadingView ? "Loading..." : "Load Timetable"}
+              </Button>
 
-                {/* Delete button - ADMIN ONLY */}
-                {user?.role === 'ADMIN' && (
-                  <button
-                    type="button"
-                    onClick={handleDeleteTimetable}
-                    disabled={isDeleting || availableTimetables.length === 0}
-                    className="w-full bg-red-600 text-white px-6 py-3 rounded-md font-semibold hover:bg-red-700 disabled:bg-gray-400 transition-colors"
-                  >
-                    {isDeleting ? "Deleting..." : "Delete Timetable"}
-                  </button>
-                )}
-              </div>
+              {/* Delete button - ADMIN ONLY */}
+              {user?.role === 'ADMIN' && (
+                <Button
+                  variant="danger"
+                  onClick={handleDeleteTimetable}
+                  disabled={isDeleting || availableTimetables.length === 0}
+                  loading={isDeleting}
+                  icon={<TrashIcon className="h-5 w-5" />}
+                  className="w-full"
+                >
+                  {isDeleting ? "Deleting..." : "Delete Timetable"}
+                </Button>
+              )}
             </div>
           </div>
+        </Card>
 
-          {/* Generate New Timetable Form - Admin Only */}
-          <RoleGuard
-            allowedRoles={['ADMIN']}
-            fallback={
-              <div className="mt-10 bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-                <p className="text-yellow-800 font-medium">
-                  Only administrators can generate timetables.
-                </p>
-                <p className="text-yellow-700 text-sm mt-2">
-                  You can view existing timetables above.
-                </p>
-              </div>
-            }
-          >
-            <form
-              onSubmit={handleSubmit}
-              className="mt-10 bg-white p-8 rounded-lg shadow-md border border-gray-200 space-y-8"
-            >
-              <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                <span>⚡</span> Generate New Timetable
-              </h2>
+        {/* Generate New Timetable Form - Admin Only */}
+        <RoleGuard
+          allowedRoles={['ADMIN']}
+          fallback={
+            <Card className="bg-yellow-50 border-l-4 border-l-yellow-500 text-center">
+              <p className="text-yellow-800 font-medium">
+                Only administrators can generate timetables.
+              </p>
+              <p className="text-yellow-700 text-sm mt-2">
+                You can view existing timetables above.
+              </p>
+            </Card>
+          }
+        >
+          <Card className="space-y-8">
+            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+              <span>⚡</span> Generate New Timetable
+            </h2>
+            <form onSubmit={handleSubmit} className="space-y-8">
 
             {/* Section Details */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1125,42 +1131,50 @@ export default function TimetablePage() {
 
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row justify-between items-center pt-5 border-t border-gray-200 gap-4">
-              <button
+              <Button
                 type="button"
+                variant="secondary"
                 onClick={addSubjectRow}
-                className="w-full sm:w-auto bg-indigo-100 text-indigo-700 px-6 py-3 rounded-md font-semibold hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                icon={<PlusIcon className="h-5 w-5" />}
+                className="w-full sm:w-auto"
               >
-                ➕ Add Subject Row
-              </button>
-              <button
+                Add Subject Row
+              </Button>
+              <Button
                 type="submit"
+                variant="success"
                 disabled={isGenerating}
-                className="w-full sm:w-auto bg-green-600 text-white px-8 py-3 rounded-md text-lg font-semibold hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400 transition-colors"
+                loading={isGenerating}
+                className="w-full sm:w-auto px-8 text-lg"
               >
-                {isGenerating ? "⏳ Generating..." : "✨ Generate Timetable"}
-              </button>
+                {isGenerating ? "Generating..." : "✨ Generate Timetable"}
+              </Button>
             </div>
             </form>
-          </RoleGuard>
+          </Card>
+        </RoleGuard>
 
-          {/* Display messages */}
-          {message && (
-            <div
-              className={`mt-6 p-4 rounded-md text-sm text-center font-medium ${
-                message.type === "success"
-                  ? "bg-green-100 text-green-800 border border-green-200"
-                  : message.type === "error"
-                  ? "bg-red-100 text-red-800 border border-red-200"
-                  : "bg-blue-100 text-blue-800 border border-blue-200"
-              }`}
-            >
+        {/* Display messages */}
+        {message && (
+          <Card className={`mt-6 text-center border-l-4 ${
+            message.type === "success"
+              ? "bg-green-50 border-l-green-500"
+              : message.type === "error"
+              ? "bg-red-50 border-l-red-500"
+              : "bg-blue-50 border-l-blue-500"
+          }`}>
+            <p className={`font-medium ${
+              message.type === "success" ? "text-green-800" :
+              message.type === "error" ? "text-red-800" : "text-blue-800"
+            }`}>
               {message.text}
-            </div>
-          )}
+            </p>
+          </Card>
+        )}
 
-          {/* Generation Statistics */}
-          {generationStats && (
-            <div className="mt-6 bg-white p-6 rounded-lg shadow-md border border-gray-200">
+        {/* Generation Statistics */}
+        {generationStats && (
+          <Card className="mt-6">
               <h3 className="text-lg font-bold text-gray-800 mb-4">Generation Statistics</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -1184,19 +1198,19 @@ export default function TimetablePage() {
                   <div className="text-xs text-green-600 mt-1">Time taken to generate</div>
                 </div>
               </div>
-            </div>
-          )}
+          </Card>
+        )}
 
-          {/* Display the timetable grid */}
-          {timetableToDisplay.length > 0 && (
-            <div ref={timetableRef}>
-              <TimetableGrid timetableData={timetableToDisplay} faculties={faculties} />
-            </div>
-          )}
+        {/* Display the timetable grid */}
+        {timetableToDisplay.length > 0 && (
+          <div ref={timetableRef}>
+            <TimetableGrid timetableData={timetableToDisplay} faculties={faculties} />
+          </div>
+        )}
 
-          {/* EXPORT BUTTONS SECTION */}
-          {timetableToDisplay.length > 0 && (
-            <div className="mt-8 bg-white p-6 rounded-lg shadow-md border border-gray-200">
+        {/* EXPORT BUTTONS SECTION */}
+        {timetableToDisplay.length > 0 && (
+          <Card className="mt-8">
               <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <span>📥</span> Export Timetable
               </h3>
@@ -1253,12 +1267,9 @@ export default function TimetablePage() {
                   <strong>💡 Tip:</strong> PDF is best for printing, Word for editing, and Excel for data analysis.
                 </p>
               </div>
-            </div>
-          )}
-
-        </div>
-      </div>
-    </main>
+          </Card>
+        )}
+      </DashboardLayout>
     </ProtectedRoute>
   );
 }

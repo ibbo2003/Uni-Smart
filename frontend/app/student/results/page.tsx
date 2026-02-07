@@ -2,7 +2,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import StudentNav from '../components/StudentNav';
+import { DashboardLayout } from '@/components/modern/DashboardLayout';
+import { PageHeader } from '@/components/modern/PageHeader';
+import { Card } from '@/components/modern/Card';
+import { Button } from '@/components/modern/Button';
+import { showToast } from '@/lib/toast';
 import { AcademicCapIcon, ChartBarIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api';
@@ -272,17 +276,23 @@ export default function StudentResults() {
       const data = await response.json();
 
       if (response.ok) {
-        setScrapeMessage(`Semester ${targetSemester} results scraped successfully! ${data.records_created || 0} new records, ${data.records_updated || 0} updated. Refreshing...`);
+        const successMsg = `Semester ${targetSemester} results scraped successfully! ${data.records_created || 0} new records, ${data.records_updated || 0} updated.`;
+        setScrapeMessage(successMsg);
+        showToast.success(successMsg);
         setTimeout(() => {
           loadResults();
           setScrapeMessage('');
         }, 2000);
       } else {
-        setScrapeMessage(data.error || 'Failed to scrape results. Please try again.');
+        const errorMsg = data.error || 'Failed to scrape results. Please try again.';
+        setScrapeMessage(errorMsg);
+        showToast.error(errorMsg);
       }
     } catch (error) {
       console.error("Failed to scrape results:", error);
-      setScrapeMessage('An error occurred while scraping results.');
+      const errorMsg = 'An error occurred while scraping results.';
+      setScrapeMessage(errorMsg);
+      showToast.error(errorMsg);
     } finally {
       setIsScraping(false);
     }
@@ -308,17 +318,14 @@ export default function StudentResults() {
   if (isLoading) {
     return (
       <ProtectedRoute allowedRoles={['STUDENT']}>
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-          <StudentNav />
-          <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="flex items-center justify-center py-20">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-600 mx-auto"></div>
-                <p className="mt-4 text-gray-600">Loading results...</p>
-              </div>
+        <DashboardLayout>
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600 text-lg">Loading results...</p>
             </div>
-          </main>
-        </div>
+          </div>
+        </DashboardLayout>
       </ProtectedRoute>
     );
   }
@@ -326,73 +333,62 @@ export default function StudentResults() {
   if (resultsData.length === 0) {
     return (
       <ProtectedRoute allowedRoles={['STUDENT']}>
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-          <StudentNav />
-          <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-8 text-center">
-              <AcademicCapIcon className="h-16 w-16 text-yellow-600 mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-gray-800 mb-2">No Results Available</h2>
-              <p className="text-gray-700 mb-6">Your results haven't been uploaded yet. Click the button below to scrape your results from VTU.</p>
+        <DashboardLayout>
+          <PageHeader
+            title="My Results"
+            description="View your semester-wise academic performance"
+            showBack={true}
+            backTo="/student/dashboard"
+            icon={<AcademicCapIcon className="h-8 w-8" />}
+          />
 
-              <button
-                onClick={() => handleScrapeResults()}
-                disabled={isScraping}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-              >
-                {isScraping ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                    Scraping Results...
-                  </>
-                ) : (
-                  <>
-                    <ArrowPathIcon className="h-5 w-5" />
-                    Scrape My Results from VTU
-                  </>
-                )}
-              </button>
+          <Card className="p-12 text-center">
+            <AcademicCapIcon className="h-20 w-20 text-yellow-600 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">No Results Available</h2>
+            <p className="text-gray-700 mb-6">Your results haven't been uploaded yet. Click the button below to scrape your results from VTU.</p>
 
-              {scrapeMessage && (
-                <div className={`mt-4 p-4 rounded-lg ${scrapeMessage.includes('success') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                  {scrapeMessage}
-                </div>
-              )}
-            </div>
-          </main>
-        </div>
+            <Button
+              variant="primary"
+              onClick={() => handleScrapeResults()}
+              disabled={isScraping}
+              loading={isScraping}
+              icon={!isScraping && <ArrowPathIcon className="h-5 w-5" />}
+            >
+              {isScraping ? 'Scraping Results...' : 'Scrape My Results from VTU'}
+            </Button>
+
+            {scrapeMessage && (
+              <div className={`mt-6 p-4 rounded-lg ${scrapeMessage.includes('success') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                {scrapeMessage}
+              </div>
+            )}
+          </Card>
+        </DashboardLayout>
       </ProtectedRoute>
     );
   }
 
   return (
     <ProtectedRoute allowedRoles={['STUDENT']}>
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        <StudentNav />
-
-        <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="mb-8 flex justify-between items-center">
-            <div>
-              <h1 className="text-4xl font-bold text-gray-800 mb-2">My Results</h1>
-              <p className="text-gray-600">View your semester-wise academic performance</p>
-            </div>
-            <button
+      <DashboardLayout>
+        <PageHeader
+          title="My Results"
+          description="View your semester-wise academic performance"
+          showBack={true}
+          backTo="/student/dashboard"
+          icon={<AcademicCapIcon className="h-8 w-8" />}
+          actions={
+            <Button
+              variant="primary"
               onClick={() => handleScrapeResults()}
               disabled={isScraping}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              loading={isScraping}
+              icon={!isScraping && <ArrowPathIcon className="h-5 w-5" />}
             >
-              {isScraping ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  Updating...
-                </>
-              ) : (
-                <>
-                  <ArrowPathIcon className="h-5 w-5" />
-                  Update Results
-                </>
-              )}
-            </button>
-          </div>
+              {isScraping ? 'Updating...' : 'Update Results'}
+            </Button>
+          }
+        />
 
           {scrapeMessage && (
             <div className={`mb-6 p-4 rounded-lg ${scrapeMessage.includes('success') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
@@ -402,7 +398,7 @@ export default function StudentResults() {
 
           {/* Missing Semesters Section */}
           {missingSemesters.length > 0 && (
-            <div className="mb-8 bg-orange-50 border border-orange-200 rounded-xl p-6">
+            <Card className="mb-8 bg-orange-50 border-l-4 border-l-orange-500">
               <h3 className="text-lg font-bold text-gray-900 mb-4">Missing Semester Results</h3>
               <p className="text-gray-700 mb-4">
                 The following semesters don't have results in the system. Click on a semester to scrape its results from VTU.
@@ -424,11 +420,11 @@ export default function StudentResults() {
                   </button>
                 ))}
               </div>
-            </div>
+            </Card>
           )}
 
           {/* CGPA Card */}
-          <div className="bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl shadow-lg p-8 text-white mb-8">
+          {/* <Card className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white mb-8">
             <div className="flex items-center gap-4 mb-4">
               <ChartBarIcon className="h-12 w-12" />
               <div>
@@ -440,21 +436,21 @@ export default function StudentResults() {
               <span className="text-6xl font-bold">{cgpa.toFixed(2)}</span>
               <span className="text-2xl mb-2">CGPA</span>
             </div>
-          </div>
+          </Card> */}
 
           {/* Semester Results */}
           <div className="space-y-6">
             {resultsData.map((semester) => (
-              <div key={semester.semester} className="bg-white rounded-xl shadow-lg p-6">
+              <Card key={semester.semester}>
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                     <AcademicCapIcon className="h-8 w-8 text-purple-600" />
                     Semester {semester.semester}
                   </h3>
-                  <div className="text-right">
+                  {/* <div className="text-right">
                     <p className="text-sm text-gray-600">SGPA</p>
                     <p className="text-3xl font-bold text-purple-600">{semester.sgpa.toFixed(2)}</p>
-                  </div>
+                  </div> */}
                 </div>
 
                 <div className="overflow-x-auto">
@@ -531,11 +527,10 @@ export default function StudentResults() {
                     <span className="font-semibold">Total Credits:</span> {semester.total_credits}
                   </p>
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
-        </main>
-      </div>
+      </DashboardLayout>
     </ProtectedRoute>
   );
 }
